@@ -11032,7 +11032,7 @@ btn.innerHTML = '📤 Kirim Test';
 }
 
 (function(){
-  function initAppContent() {
+  function initApp() {
     if (typeof APP !== 'undefined' && APP) {
       if (APP.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
       startClock();
@@ -11041,9 +11041,9 @@ btn.innerHTML = '📤 Kirim Test';
     }
   }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAppContent);
+    document.addEventListener('DOMContentLoaded', initApp);
   } else {
-    initAppContent();
+    initApp();
   }
 })();
 </script>
