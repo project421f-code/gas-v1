@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="description" content="GA Operations Management System">
+<title>GA Operations | General Affair</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root { --font: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; scroll-behavior: smooth; }
+body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0a0f1e; color: #f1f5f9; }
+#loading-screen {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #0a0f1e, #1a1f3a 50%, #0d1229);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999; transition: opacity 0.5s;
+}
+#loading-screen.hidden { opacity: 0; pointer-events: none; }
+.loading-logo {
+  width: 80px; height: 80px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 20px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 24px; animation: pulse-logo 2s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(99,102,241,0.4);
+}
+@keyframes pulse-logo {
+  0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(99,102,241,0.4)}
+  50%{transform:scale(1.05);box-shadow:0 0 60px rgba(99,102,241,0.6)}
+}
+.loading-text { color: #e0e7ff; font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+.loading-sub { color: #94a3b8; font-size: 0.85rem; }
+.loading-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 24px; overflow: hidden; }
+.loading-bar-inner { width: 40%; height: 100%; background: linear-gradient(90deg,#6366f1,#8b5cf6,#6366f1); border-radius: 3px; animation: loading-slide 1.5s ease-in-out infinite; }
+@keyframes loading-slide { 0%{transform:translateX(-100%)}100%{transform:translateX(350%)} }
+#login-screen {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #0a0f1e, #111936 50%, #0d1229);
+  display: none; align-items: center; justify-content: center; z-index: 9998;
+}
+#login-screen.show { display: flex; }
+.login-container {
+  width: 420px; max-width: 92vw;
+  background: rgba(30,41,59,0.8); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 24px;
+  padding: 40px; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+}
+.login-title { text-align: center; color: #f1f5f9; font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+.login-subtitle { text-align: center; color: #94a3b8; font-size: 0.85rem; margin-bottom: 28px; }
+.login-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 4px; margin-bottom: 24px; }
+.login-tab { flex:1; padding:10px; text-align:center; border-radius:10px; font-size:0.82rem; font-weight:500; cursor:pointer; color:#94a3b8; transition:all 0.25s ease; border:none; background:none; }
+.login-tab.active { background:rgba(99,102,241,0.2); color:#e0e7ff; }
+.login-form-group { margin-bottom: 16px; }
+.login-label { display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 500; margin-bottom: 6px; }
+.login-input {
+  width: 100%; padding: 12px 16px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; color: #f1f5f9; font-family: var(--font); font-size: 0.9rem;
+  outline: none; transition: all 0.25s ease;
+}
+.login-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+.login-btn {
+  width: 100%; padding: 13px; border: none; border-radius: 12px;
+  font-family: var(--font); font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; transition: all 0.25s ease; margin-top: 8px;
+}
+.login-btn-primary { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; }
+.login-btn-google { background: rgba(255,255,255,0.08); color: #e0e7ff; border: 1px solid rgba(255,255,255,0.12); }
+.login-error { background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:10px 14px; color:#fca5a5; font-size:0.82rem; margin-bottom:16px; display:none; }
+.login-error.show { display: block; }
+#toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 14px; font-size: 0.85rem; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,0.15); animation: toast-in 0.4s ease; backdrop-filter: blur(10px); }
+.toast.success { background: rgba(16,185,129,0.95); color: white; }
+.toast.error { background: rgba(239,68,68,0.95); color: white; }
+@keyframes toast-in { from{opacity:0;transform:translateX(50px)} to{opacity:1;transform:translateX(0)} }
+#app-content { display: none; }
+#app-content.show { display: block; }
+</style>
+</head>
+<body>
+<div id="loading-screen">
+  <div class="loading-logo"><svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs><rect x="4" y="4" width="72" height="72" rx="18" fill="url(#lg)"/><text x="40" y="42" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="800" font-size="18" fill="white" letter-spacing="2.5">GA</text></svg></div>
+  <div class="loading-text">GA Operations</div>
+  <div class="loading-sub">Memuat sistem...</div>
+  <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+</div>
+<div id="toast-container"></div>
+<div id="login-screen">
+  <div class="login-container">
+    <div class="login-title">GA Operations</div>
+    <div class="login-subtitle">Sistem Manajemen Operasional General Affair</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('sso')">Google SSO</button>
+      <button class="login-tab" onclick="switchLoginTab('manual')">Manual Login</button>
+    </div>
+    <div id="login-sso-panel">
+      <button class="login-btn login-btn-google" id="btn-sso" onclick="doGoogleSSO()">Login dengan Google Account</button>
+    </div>
+    <div id="login-manual-panel" style="display:none">
+      <div class="login-form-group">
+        <label class="login-label">Email</label>
+        <input type="email" class="login-input" id="login-email" placeholder="contoh@ga.com">
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Password</label>
+        <input type="password" class="login-input" id="login-password" placeholder="Masukkan password" onkeyup="if(event.key==='Enter')doManualLogin()">
+      </div>
+      <button class="login-btn login-btn-primary" id="btn-manual-login" onclick="doManualLogin()">Login</button>
+    </div>
+  </div>
+</div>
+<div id="app-content"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────
+// CDN_URL: Ganti dengan URL GitHub Pages atau jsDelivr Anda setelah push
+var CDN_URL = '__CDN_URL__'; // Will be replaced by Code.gs at deploy time
+
+// ─── STATE ─────────────────────────────────────────────────
+var APP = {};
+
+// ─── CDN LOADER ────────────────────────────────────────────
+// Load the app HTML from CDN, inject into page, then init
+function loadAppFromCDN() {
+  if (!CDN_URL || CDN_URL.indexOf('__CDN') >= 0) {
+    showLoginError('⚠️ CDN_URL belum dikonfigurasi. Admin: buka ?setupCDN=1&url=URL_FRONTEND_ANDA');
+    showLoginScreen();
+    return;
+  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', CDN_URL, true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        injectAppHtml(xhr.responseText);
+      } else {
+        console.error('CDN load failed:', xhr.status);
+        showLoginError('❌ Gagal memuat aplikasi dari CDN (HTTP ' + xhr.status + '). Hubungi Admin.');
+        showLoginScreen();
+      }
+    }
+  };
+  xhr.onerror = function() {
+    console.error('CDN network error');
+    showLoginError('❌ Gagal terhubung ke CDN. Periksa koneksi internet atau URL CDN.');
+    showLoginScreen();
+  };
+  xhr.send();
+}
+
+function injectAppHtml(html) {
+  // Extract and inject <style>
+  var styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+  if (styleMatch) {
+    var style = document.createElement('style');
+    style.textContent = styleMatch[1];
+    document.head.appendChild(style);
+  }
+
+  // Extract HTML structure (body content)
+  var bodyMatch = html.match(/<body>([\s\S]*?)<\/body>/);
+  if (!bodyMatch) {
+    bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+  }
+  var appHtml = bodyMatch ? bodyMatch[1] : html;
+
+  // Inject into app-content
+  var container = document.getElementById('app-content');
+  if (container) {
+    container.innerHTML = appHtml;
+    container.classList.add('show');
+  }
+
+  // Extract and evaluate <script> tags
+  var scriptRegex = /<script>([\s\S]*?)<\/script>/g;
+  var match;
+  var scripts = [];
+  while ((match = scriptRegex.exec(appHtml)) !== null) {
+    scripts.push(match[1]);
+  }
+
+  // Also check for scripts in the full doc (outside body)
+  var fullScriptRegex = /<script>([\s\S]*?)<\/script>/g;
+  var fullMatch;
+  while ((fullMatch = fullScriptRegex.exec(html)) !== null) {
+    var s = fullMatch[1];
+    // Skip scripts already in body
+    if (scripts.indexOf(s) < 0) {
+      scripts.push(s);
+    }
+  }
+
+  // Execute scripts sequentially
+  executeScripts(scripts, 0, function() {
+    // All scripts loaded - try auto-login
+    hideLoading();
+    if (typeof tryAutoLogin === 'function') {
+      tryAutoLogin();
+    } else {
+      showLoginScreen();
+    }
+  });
+}
+
+function executeScripts(scripts, idx, callback) {
+  if (idx >= scripts.length) {
+    if (callback) callback();
+    return;
+  }
+  var scriptContent = scripts[idx];
+  if (!scriptContent || scriptContent.trim() === '') {
+    executeScripts(scripts, idx + 1, callback);
+    return;
+  }
+  try {
+    var ns = document.createElement('script');
+    ns.textContent = scriptContent;
+    document.body.appendChild(ns);
+    document.body.removeChild(ns);
+  } catch(e) {
+    console.error('Script exec error:', e);
+  }
+  // Use setTimeout to give browser time to process
+  setTimeout(function() {
+    executeScripts(scripts, idx + 1, callback);
+  }, 10);
+}
+
+function hideLoading() {
+  var ls = document.getElementById('loading-screen');
+  if (ls) ls.classList.add('hidden');
+}
+
+function showLoginScreen() {
+  hideLoading();
+  var ls = document.getElementById('login-screen');
+  if (ls) ls.classList.add('show');
+}
+
+// ─── AUTH FUNCTIONS (used before CDN app loads) ───────────
+function switchLoginTab(mode) {
+  var tabs = document.querySelectorAll('.login-tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  var sso = document.getElementById('login-sso-panel');
+  var manual = document.getElementById('login-manual-panel');
+  if (mode === 'sso') {
+    sso.style.display = 'block'; manual.style.display = 'none'; tabs[0].classList.add('active');
+  } else {
+    sso.style.display = 'none'; manual.style.display = 'block'; tabs[1].classList.add('active');
+  }
+  document.getElementById('login-error').classList.remove('show');
+}
+
+function doGoogleSSO() {
+  var btn = document.getElementById('btn-sso');
+  btn.disabled = true; btn.textContent = '⏳ Memproses...';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false; btn.textContent = 'Login dengan Google Account';
+      if (res.success && res.data) {
+        // Reload - CDN app will detect session and init
+        location.reload();
+      } else {
+        showLoginError(res.error || 'Login gagal');
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Login dengan Google Account';
+      showLoginError(e.message);
+    })
+    .loginWithGoogleSSO();
+}
+
+function doManualLogin() {
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email || !password) { showLoginError('Email dan password wajib diisi.'); return; }
+  var btn = document.getElementById('btn-manual-login');
+  btn.disabled = true; btn.textContent = '⏳ Memproses...';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false; btn.textContent = 'Login';
+      if (res.success && res.data) {
+        try { localStorage.setItem('ga_session', JSON.stringify(res.data)); } catch(e) {}
+        // Panggil handleLoginSuccess langsung (dari CDN JS yang sudah di-load)
+        if (typeof handleLoginSuccess === 'function') {
+          handleLoginSuccess(res.data);
+        } else {
+          location.reload(); // fallback
+        }
+      } else {
+        showLoginError(res.error || 'Login gagal');
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Login';
+      showLoginError(e.message);
+    })
+    .loginWithEmailAndPassword(email, password);
+}
+
+function showLoginError(msg) {
+  var el = document.getElementById('login-error');
+  el.textContent = msg; el.classList.add('show');
+}
+
+// ─── BOOT ──────────────────────────────────────────────────
+// Start: load app from CDN
+loadAppFromCDN();
+</script>
+</body>
+</html>

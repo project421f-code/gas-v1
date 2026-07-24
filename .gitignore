@@ -4,3 +4,5 @@
 !frontend/**
 !/README.md
 !/.gitignore
+!/index.html
+!/logo_preview.html
