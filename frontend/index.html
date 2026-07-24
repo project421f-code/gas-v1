@@ -11031,21 +11031,21 @@ btn.innerHTML = '📤 Kirim Test';
 );
 }
 
-(function(){
-  function initApp() {
-    if (typeof APP !== 'undefined' && APP) {
-      if (APP.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
-      startClock();
-      injectMobileTableLabels();
-      loadPageData(APP.currentPage || 'dashboard');
-    }
+// Global init function - called by handleLoginSuccess after login
+function initApp() {
+  if (typeof APP !== 'undefined' && APP) {
+    if (APP.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
+    startClock();
+    injectMobileTableLabels();
+    loadPageData(APP.currentPage || 'dashboard');
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-  } else {
-    initApp();
-  }
-})();
+}
+// Auto-init if document already loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 </script>
 </body>
 </html>
