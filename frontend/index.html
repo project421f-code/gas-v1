@@ -4798,11 +4798,11 @@ google.script.run
 .withSuccessHandler(function(res) {
 btn.disabled = false;
 btn.textContent = '🌐 Login dengan Google Account';
-if (res.success) {
+if (res.success && res.data) {
 handleLoginSuccess(res.data);
 }
 else {
-showLoginError(res.error);
+showLoginError(res.error || 'Login SSO gagal');
 }
 }
 )
@@ -4828,11 +4828,11 @@ google.script.run
 .withSuccessHandler(function(res) {
 btn.disabled = false;
 btn.textContent = '🔐 Login';
-if (res.success) {
+if (res.success && res.data) {
 handleLoginSuccess(res.data);
 }
 else {
-showLoginError(res.error);
+showLoginError(res.error || 'Login gagal: data tidak valid');
 }
 }
 )
@@ -4846,6 +4846,7 @@ showLoginError(e.message);
 password);
 }
 function handleLoginSuccess(data) {
+if (!data) { showLoginError('Data login kosong. Hubungi Admin.'); return; }
 APP.user = data;
 APP.token = data.token;
 localStorage.setItem('ga_session',
