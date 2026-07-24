@@ -4876,37 +4876,53 @@ document.getElementById('app').classList.remove('show');
 document.getElementById('login-screen').classList.add('show');
 showToast('success',
 'Berhasil logout.');
+}function tryAutoLogin() {
+  // First try: Google SSO
+  google.script.run
+  .withSuccessHandler(function(res) {
+    if (res.success && res.data && res.data.email) {
+      google.script.run
+      .withSuccessHandler(function(loginRes) {
+        if (loginRes.success) {
+          handleLoginSuccess(loginRes.data);
+        } else {
+          tryEmailPasswordFallback();
+        }
+      })
+      .withFailureHandler(function() {
+        tryEmailPasswordFallback();
+      })
+      .loginWithGoogleSSO();
+    } else {
+      tryEmailPasswordFallback();
+    }
+  })
+  .withFailureHandler(function() {
+    tryEmailPasswordFallback();
+  })
+  .checkGoogleSSO();
 }
-function tryAutoLogin() {
-google.script.run
-.withSuccessHandler(function(res) {
-if (res.success && res.data && res.data.email) {
-google.script.run
-.withSuccessHandler(function(loginRes) {
-if (loginRes.success) {
-handleLoginSuccess(loginRes.data);
-}
-else {
-showLoginScreen();
-}
-}
-)
-.withFailureHandler(function() {
-showLoginScreen();
-}
-)
-.loginWithGoogleSSO();
-}
-else {
-showLoginScreen();
-}
-}
-)
-.withFailureHandler(function() {
-showLoginScreen();
-}
-)
-.checkGoogleSSO();
+
+function tryEmailPasswordFallback() {
+  // Second try: check localStorage for stored email/password session
+  try {
+    var sessionData = localStorage.getItem('ga_session');
+    if (sessionData) {
+      var parsed = JSON.parse(sessionData);
+      if (parsed && parsed.email) {
+        // Session stored - reload to reinitialize with CDN app
+        // The session token was already validated on login
+        APP.user = parsed;
+        APP.token = parsed.token || '';
+        initApp();
+        return;
+      }
+    }
+  } catch(e) {
+    console.error('Session restore error:', e);
+  }
+  // Nothing works - show login screen
+  showLoginScreen();
 }
 function showToast(type,
 message) {
@@ -11031,21 +11047,21 @@ btn.innerHTML = '📤 Kirim Test';
 );
 }
 
-(function(){
-  function initApp() {
-    if (typeof APP !== 'undefined' && APP) {
-      if (APP.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
-      startClock();
-      injectMobileTableLabels();
-      loadPageData(APP.currentPage || 'dashboard');
-    }
+// Global init function - called by handleLoginSuccess after login
+function initApp() {
+  if (typeof APP !== 'undefined' && APP) {
+    if (APP.darkMode) document.documentElement.setAttribute('data-theme', 'dark');
+    startClock();
+    injectMobileTableLabels();
+    loadPageData(APP.currentPage || 'dashboard');
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-  } else {
-    initApp();
-  }
-})();
+}
+// Auto-init if document already loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 </script>
 </body>
 </html>
