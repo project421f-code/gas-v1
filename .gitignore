@@ -1,0 +1,6 @@
+# Ignore everything except frontend/
+*
+!/frontend/
+!frontend/**
+!/README.md
+!/.gitignore
