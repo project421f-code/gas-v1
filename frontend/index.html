@@ -4854,6 +4854,9 @@ JSON.stringify(data));
 showToast('success',
 'Selamat datang,
 ' + data.nama + '!');
+// Show app & hide login screen
+document.getElementById('app').classList.add('show');
+document.getElementById('login-screen').classList.remove('show');
 initApp();
 }
 function showLoginError(msg) {
@@ -4915,6 +4918,8 @@ function tryEmailPasswordFallback() {
         // The session token was already validated on login
         APP.user = parsed;
         APP.token = parsed.token || '';
+        document.getElementById('app').classList.add('show');
+        document.getElementById('login-screen').classList.remove('show');
         initApp();
         return;
       }
