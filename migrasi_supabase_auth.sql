@@ -138,7 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_user_list_auth_id ON user_list(auth_id);
 
 -- Hapus semua policy yang mungkin sudah ada (idempotent)
 DO $$ DECLARE pol RECORD; BEGIN
-  FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' AND policyname LIKE 'Auth users%' OR policyname = 'Public read access' OR policyname LIKE 'Allow public%' LOOP
+  FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' AND (policyname LIKE 'Auth users%' OR policyname = 'Public read access' OR policyname LIKE 'Allow public%') LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
   END LOOP;
 END $$;
