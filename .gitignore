@@ -6,3 +6,4 @@
 !/.gitignore
 !/index.html
 !/logo_preview.html
+!/migrasi_supabase_auth.sql

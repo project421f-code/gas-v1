@@ -3,19 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="description" content="GA Operations Management System">
+<meta name="description" content="GA Operations Management System - General Affair">
 <title>GA Operations | General Affair</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root { --font: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+:root { --font: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; --primary:#6366f1; --primary-light:#8b5cf6; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 14px; scroll-behavior: smooth; }
-body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0a0f1e; color: #f1f5f9; }
+body { font-family: var(--font); height: 100vh; background: #0a0f1e; color: #f1f5f9; overflow-x: hidden; }
+
+/* ── LOADING ── */
 #loading-screen {
   position: fixed; inset: 0;
   background: linear-gradient(135deg, #0a0f1e, #1a1f3a 50%, #0d1229);
@@ -25,7 +24,7 @@ body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0
 #loading-screen.hidden { opacity: 0; pointer-events: none; }
 .loading-logo {
   width: 80px; height: 80px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
   border-radius: 20px; display: flex; align-items: center; justify-content: center;
   margin-bottom: 24px; animation: pulse-logo 2s ease-in-out infinite;
   box-shadow: 0 0 40px rgba(99,102,241,0.4);
@@ -37,8 +36,10 @@ body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0
 .loading-text { color: #e0e7ff; font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
 .loading-sub { color: #94a3b8; font-size: 0.85rem; }
 .loading-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 24px; overflow: hidden; }
-.loading-bar-inner { width: 40%; height: 100%; background: linear-gradient(90deg,#6366f1,#8b5cf6,#6366f1); border-radius: 3px; animation: loading-slide 1.5s ease-in-out infinite; }
+.loading-bar-inner { width: 40%; height: 100%; background: linear-gradient(90deg,var(--primary),var(--primary-light),var(--primary)); border-radius: 3px; animation: loading-slide 1.5s ease-in-out infinite; }
 @keyframes loading-slide { 0%{transform:translateX(-100%)}100%{transform:translateX(350%)} }
+
+/* ── LOGIN ── */
 #login-screen {
   position: fixed; inset: 0;
   background: linear-gradient(135deg, #0a0f1e, #111936 50%, #0d1229);
@@ -53,9 +54,6 @@ body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0
 }
 .login-title { text-align: center; color: #f1f5f9; font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
 .login-subtitle { text-align: center; color: #94a3b8; font-size: 0.85rem; margin-bottom: 28px; }
-.login-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 4px; margin-bottom: 24px; }
-.login-tab { flex:1; padding:10px; text-align:center; border-radius:10px; font-size:0.82rem; font-weight:500; cursor:pointer; color:#94a3b8; transition:all 0.25s ease; border:none; background:none; }
-.login-tab.active { background:rgba(99,102,241,0.2); color:#e0e7ff; }
 .login-form-group { margin-bottom: 16px; }
 .login-label { display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 500; margin-bottom: 6px; }
 .login-input {
@@ -64,257 +62,696 @@ body { font-family: var(--font); overflow: hidden; height: 100vh; background: #0
   border-radius: 12px; color: #f1f5f9; font-family: var(--font); font-size: 0.9rem;
   outline: none; transition: all 0.25s ease;
 }
-.login-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+.login-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
 .login-btn {
   width: 100%; padding: 13px; border: none; border-radius: 12px;
   font-family: var(--font); font-size: 0.95rem; font-weight: 600;
   cursor: pointer; transition: all 0.25s ease; margin-top: 8px;
 }
-.login-btn-primary { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; }
-.login-btn-google { background: rgba(255,255,255,0.08); color: #e0e7ff; border: 1px solid rgba(255,255,255,0.12); }
+.login-btn-primary { background: linear-gradient(135deg,var(--primary),var(--primary-light)); color: white; }
 .login-error { background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:10px 14px; color:#fca5a5; font-size:0.82rem; margin-bottom:16px; display:none; }
-.login-error.show { display: block; }
+
+/* ── TOAST ── */
 #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
 .toast { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 14px; font-size: 0.85rem; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,0.15); animation: toast-in 0.4s ease; backdrop-filter: blur(10px); }
 .toast.success { background: rgba(16,185,129,0.95); color: white; }
 .toast.error { background: rgba(239,68,68,0.95); color: white; }
 @keyframes toast-in { from{opacity:0;transform:translateX(50px)} to{opacity:1;transform:translateX(0)} }
-#app-content { display: none; }
-#app-content.show { display: block; }
+
+/* ── SIDEBAR ── */
+#app-layout { display: none; height: 100vh; }
+#app-layout.show { display: flex; }
+.sidebar {
+  width: 260px; min-width: 260px;
+  background: rgba(15,23,42,0.95); backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex; flex-direction: column; padding: 0;
+  overflow-y: auto;
+}
+.sidebar-header {
+  padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-logo {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg,var(--primary),var(--primary-light));
+  border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sidebar-logo svg { width: 40px; height: 40px; }
+.sidebar-title { font-size: 0.95rem; font-weight: 700; color: #f1f5f9; }
+.sidebar-sub { font-size: 0.65rem; color: #64748b; }
+.sidebar-user {
+  padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg,var(--primary),var(--primary-light));
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.85rem; color: white; flex-shrink: 0;
+}
+.sidebar-user-info { flex: 1; min-width: 0; }
+.sidebar-user-name { font-size: 0.82rem; font-weight: 600; color: #e0e7ff; }
+.sidebar-user-role { font-size: 0.7rem; color: #64748b; }
+.nav-list { flex: 1; padding: 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  color: #94a3b8; font-size: 0.82rem; font-weight: 500;
+  transition: all 0.2s ease; margin-bottom: 2px; text-decoration: none;
+}
+.nav-item:hover { background: rgba(255,255,255,0.05); color: #e0e7ff; }
+.nav-item.active { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+.nav-item .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+.nav-item .nav-badge {
+  margin-left: auto; background: rgba(239,68,68,0.2); color: #fca5a5;
+  font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+.nav-item.logout { color: #ef4444; }
+.nav-item.logout:hover { background: rgba(239,68,68,0.1); }
+
+/* ── MAIN CONTENT ── */
+.main-content {
+  flex: 1; overflow-y: auto; padding: 24px 28px;
+  background: linear-gradient(135deg, #0a0f1e, #111936, #0d1229);
+}
+.page-header { margin-bottom: 24px; }
+.page-title { font-size: 1.3rem; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+.page-desc { font-size: 0.8rem; color: #64748b; }
+
+/* ── STATS CARDS ── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.stat-card {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; padding: 18px 20px; transition: all 0.25s ease;
+}
+.stat-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(99,102,241,0.2); transform: translateY(-2px); }
+.stat-label { font-size: 0.72rem; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.stat-value { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; }
+.stat-value.green { color: #34d399; }
+.stat-value.blue { color: #60a5fa; }
+.stat-value.purple { color: #a78bfa; }
+.stat-value.orange { color: #fb923c; }
+.stat-value.red { color: #f87171; }
+.stat-sub { font-size: 0.7rem; color: #475569; margin-top: 2px; }
+
+/* ── QUICK ACTIONS ── */
+.quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.action-card {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; padding: 20px; cursor: pointer;
+  transition: all 0.25s ease; text-decoration: none; color: #e0e7ff;
+}
+.action-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(99,102,241,0.3); transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+.action-icon { font-size: 1.8rem; margin-bottom: 10px; }
+.action-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+.action-desc { font-size: 0.75rem; color: #94a3b8; }
+
+/* ── RECENT ACTIVITY ── */
+.section-card {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; padding: 20px; margin-bottom: 20px;
+}
+.section-title { font-size: 0.85rem; font-weight: 600; color: #e0e7ff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.activity-item {
+  display: flex; align-items: flex-start; gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+.activity-dot.green { background: #34d399; }
+.activity-dot.blue { background: #60a5fa; }
+.activity-dot.orange { background: #fb923c; }
+.activity-text { font-size: 0.78rem; color: #94a3b8; flex: 1; }
+.activity-text strong { color: #e0e7ff; font-weight: 600; }
+.activity-time { font-size: 0.68rem; color: #475569; white-space: nowrap; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .sidebar { width: 60px; min-width: 60px; }
+  .sidebar-title, .sidebar-sub, .sidebar-user-info, .nav-item .nav-text, .sidebar-user-name, .sidebar-user-role { display: none; }
+  .sidebar-header { justify-content: center; padding: 12px; }
+  .sidebar-user { justify-content: center; padding: 12px; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .main-content { padding: 16px; }
+}
 </style>
 </head>
 <body>
+
+<!-- LOADING -->
 <div id="loading-screen">
-  <div class="loading-logo"><svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs><rect x="4" y="4" width="72" height="72" rx="18" fill="url(#lg)"/><text x="40" y="42" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="800" font-size="18" fill="white" letter-spacing="2.5">GA</text></svg></div>
+  <div class="loading-logo">
+    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+      <rect x="4" y="4" width="72" height="72" rx="18" fill="url(#lg)"/>
+      <text x="40" y="42" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="800" font-size="18" fill="white" letter-spacing="2.5">GA</text>
+    </svg>
+  </div>
   <div class="loading-text">GA Operations</div>
   <div class="loading-sub">Memuat sistem...</div>
   <div class="loading-bar"><div class="loading-bar-inner"></div></div>
 </div>
+
+<!-- TOAST -->
 <div id="toast-container"></div>
+
+<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-container">
     <div class="login-title">GA Operations</div>
     <div class="login-subtitle">Sistem Manajemen Operasional General Affair</div>
     <div class="login-error" id="login-error"></div>
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="switchLoginTab('sso')">Google SSO</button>
-      <button class="login-tab" onclick="switchLoginTab('manual')">Manual Login</button>
+    <div class="login-form-group">
+      <label class="login-label">Email</label>
+      <input type="email" class="login-input" id="login-email" placeholder="email@ga.com" autocomplete="email">
     </div>
-    <div id="login-sso-panel">
-      <button class="login-btn login-btn-google" id="btn-sso" onclick="doGoogleSSO()">Login dengan Google Account</button>
+    <div class="login-form-group">
+      <label class="login-label">Password</label>
+      <input type="password" class="login-input" id="login-password" placeholder="Masukkan password" autocomplete="current-password" onkeyup="if(event.key==='Enter')doLogin()">
     </div>
-    <div id="login-manual-panel" style="display:none">
-      <div class="login-form-group">
-        <label class="login-label">Email</label>
-        <input type="email" class="login-input" id="login-email" placeholder="contoh@ga.com">
-      </div>
-      <div class="login-form-group">
-        <label class="login-label">Password</label>
-        <input type="password" class="login-input" id="login-password" placeholder="Masukkan password" onkeyup="if(event.key==='Enter')doManualLogin()">
-      </div>
-      <button class="login-btn login-btn-primary" id="btn-manual-login" onclick="doManualLogin()">Login</button>
-    </div>
+    <button class="login-btn login-btn-primary" id="btn-login" onclick="doLogin()">Login</button>
   </div>
 </div>
-<div id="app-content"></div>
+
+<!-- APP LAYOUT -->
+<div id="app-layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
+          <rect width="40" height="40" rx="10" fill="url(#sg)"/>
+          <text x="20" y="22" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="800" font-size="14" fill="white" letter-spacing="1.5">GA</text>
+        </svg>
+      </div>
+      <div>
+        <div class="sidebar-title">GA Operations</div>
+        <div class="sidebar-sub">General Affair</div>
+      </div>
+    </div>
+    <div class="sidebar-user">
+      <div class="sidebar-avatar" id="user-avatar">A</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name" id="user-name">Loading...</div>
+        <div class="sidebar-user-role" id="user-role">Loading...</div>
+      </div>
+    </div>
+    <div class="nav-list">
+      <a class="nav-item active" href="javascript:void(0)" onclick="showPage('dashboard', this)">
+        <span class="nav-icon">&#x1F3E0;</span>
+        <span class="nav-text">Dashboard</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('assets', this)">
+        <span class="nav-icon">&#x1F4CB;</span>
+        <span class="nav-text">Ketersediaan Aset</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('survey', this)">
+        <span class="nav-icon">&#x1F4CA;</span>
+        <span class="nav-text">Survey Kepuasan</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('inbox', this)">
+        <span class="nav-icon">&#x1F4E8;</span>
+        <span class="nav-text">Pesanan Masuk</span>
+        <span class="nav-badge" id="order-badge" style="display:none">0</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('guests', this)">
+        <span class="nav-icon">&#x1F3E8;</span>
+        <span class="nav-text">Tamu Kos</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('maintenance', this)">
+        <span class="nav-icon">&#x1F527;</span>
+        <span class="nav-text">Maintenance</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('patrol', this)">
+        <span class="nav-icon">&#x1F6E1;</span>
+        <span class="nav-text">Patroli</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('housekeeping', this)">
+        <span class="nav-icon">&#x1F9F9;</span>
+        <span class="nav-text">Housekeeping</span>
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item logout" href="javascript:void(0)" onclick="doLogout()">
+        <span class="nav-icon">&#x1F6AA;</span>
+        <span class="nav-text">Logout</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-content" id="main-content">
+    <!-- Content will be dynamically loaded here -->
+  </div>
+</div>
 
 <script>
-// ─── CONFIG ────────────────────────────────────────────────
-// CDN_URL: Ganti dengan URL GitHub Pages atau jsDelivr Anda setelah push
-var CDN_URL = '__CDN_URL__'; // Will be replaced by Code.gs at deploy time
+// ════════════════════════════════════════════════════════════
+// SUPABASE CONFIG
+// ════════════════════════════════════════════════════════════
+var SUPABASE_URL = 'https://ytoopikqfmiomgfzhoem.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0b29waWtxZm1pb21nZnpob2VtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc4MzgsImV4cCI6MjEwMDIyMzgzOH0.64f5RJm2eVGmYd2PlIM125brirxNP0eG-YfX8NT-pls';
 
-// ─── STATE ─────────────────────────────────────────────────
-var APP = {};
+var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── CDN LOADER ────────────────────────────────────────────
-// Load the app HTML from CDN, inject into page, then init
-function loadAppFromCDN() {
-  if (!CDN_URL || CDN_URL.indexOf('__CDN') >= 0) {
-    showLoginError('⚠️ CDN_URL belum dikonfigurasi. Admin: buka ?setupCDN=1&url=URL_FRONTEND_ANDA');
-    showLoginScreen();
-    return;
-  }
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+var APP = { user: null, currentPage: 'dashboard' };
 
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', CDN_URL, true);
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState === 4) {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        injectAppHtml(xhr.responseText);
-      } else {
-        console.error('CDN load failed:', xhr.status);
-        showLoginError('❌ Gagal memuat aplikasi dari CDN (HTTP ' + xhr.status + '). Hubungi Admin.');
+// ════════════════════════════════════════════════════════════
+// BOOT — Check Supabase Auth session
+// ════════════════════════════════════════════════════════════
+(function() {
+  supabase.auth.getSession().then(function(sessionRes) {
+    if (sessionRes.data.session) {
+      // Session exists, fetch user profile from user_list
+      var email = sessionRes.data.session.user.email;
+      supabase.from('user_list').select('*').eq('email', email).single().then(function(res) {
+        if (res.data && res.data.status === 'Aktif') {
+          APP.user = res.data;
+          hideLoading();
+          initApp();
+        } else {
+          supabase.auth.signOut();
+          setTimeout(function() { hideLoading(); showLoginScreen(); }, 1000);
+        }
+      }).catch(function() {
+        // Supabase unreachable, try to use cached user
+        hideLoading();
         showLoginScreen();
-      }
-    }
-  };
-  xhr.onerror = function() {
-    console.error('CDN network error');
-    showLoginError('❌ Gagal terhubung ke CDN. Periksa koneksi internet atau URL CDN.');
-    showLoginScreen();
-  };
-  xhr.send();
-}
-
-function injectAppHtml(html) {
-  // Extract and inject <style>
-  var styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
-  if (styleMatch) {
-    var style = document.createElement('style');
-    style.textContent = styleMatch[1];
-    document.head.appendChild(style);
-  }
-
-  // Extract HTML structure (body content)
-  var bodyMatch = html.match(/<body>([\s\S]*?)<\/body>/);
-  if (!bodyMatch) {
-    bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/);
-  }
-  var appHtml = bodyMatch ? bodyMatch[1] : html;
-
-  // Inject into app-content
-  var container = document.getElementById('app-content');
-  if (container) {
-    container.innerHTML = appHtml;
-    container.classList.add('show');
-  }
-
-  // Extract and evaluate <script> tags
-  var scriptRegex = /<script>([\s\S]*?)<\/script>/g;
-  var match;
-  var scripts = [];
-  while ((match = scriptRegex.exec(appHtml)) !== null) {
-    scripts.push(match[1]);
-  }
-
-  // Also check for scripts in the full doc (outside body)
-  var fullScriptRegex = /<script>([\s\S]*?)<\/script>/g;
-  var fullMatch;
-  while ((fullMatch = fullScriptRegex.exec(html)) !== null) {
-    var s = fullMatch[1];
-    // Skip scripts already in body
-    if (scripts.indexOf(s) < 0) {
-      scripts.push(s);
-    }
-  }
-
-  // Execute scripts sequentially
-  executeScripts(scripts, 0, function() {
-    // All scripts loaded - try auto-login
-    hideLoading();
-    if (typeof tryAutoLogin === 'function') {
-      tryAutoLogin();
+      });
     } else {
-      showLoginScreen();
+      // No session
+      setTimeout(function() { hideLoading(); showLoginScreen(); }, 1200);
     }
+  }).catch(function() {
+    setTimeout(function() { hideLoading(); showLoginScreen(); }, 1200);
   });
-}
+})();
 
-function executeScripts(scripts, idx, callback) {
-  if (idx >= scripts.length) {
-    if (callback) callback();
-    return;
-  }
-  var scriptContent = scripts[idx];
-  if (!scriptContent || scriptContent.trim() === '') {
-    executeScripts(scripts, idx + 1, callback);
-    return;
-  }
+// ════════════════════════════════════════════════════════════
+// AUTH — Supabase Auth Login
+// ════════════════════════════════════════════════════════════
+async function doLogin() {
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email || !password) { showLoginError('Email dan password wajib diisi.'); return; }
+
+  var btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = '\u23F3 Memproses...';
+
   try {
-    var ns = document.createElement('script');
-    ns.textContent = scriptContent;
-    document.body.appendChild(ns);
-    document.body.removeChild(ns);
+    // Use Supabase Auth to sign in
+    var authRes = await supabase.auth.signInWithPassword({ email: email, password: password });
+
+    if (authRes.error) {
+      btn.disabled = false; btn.textContent = 'Login';
+      if (authRes.error.message.includes('Invalid login')) {
+        showLoginError('Email atau password salah.');
+      } else {
+        showLoginError(authRes.error.message);
+      }
+      return;
+    }
+
+    // Fetch user profile from user_list
+    var profileRes = await supabase.from('user_list').select('*').eq('email', email).single();
+
+    if (profileRes.error || !profileRes.data) {
+      await supabase.auth.signOut();
+      btn.disabled = false; btn.textContent = 'Login';
+      showLoginError('Profil user tidak ditemukan. Hubungi Admin.');
+      return;
+    }
+
+    if (profileRes.data.status !== 'Aktif') {
+      await supabase.auth.signOut();
+      btn.disabled = false; btn.textContent = 'Login';
+      showLoginError('Akun Anda tidak aktif. Hubungi Admin.');
+      return;
+    }
+
+    // Success
+    APP.user = profileRes.data;
+    btn.disabled = false; btn.textContent = 'Login';
+    showToast('Selamat datang, ' + profileRes.data.nama + '!', 'success');
+    hideLoginScreen();
+    initApp();
+
   } catch(e) {
-    console.error('Script exec error:', e);
+    btn.disabled = false; btn.textContent = 'Login';
+    showLoginError('Gagal terhubung ke server. Periksa koneksi.');
+    console.error(e);
   }
-  // Use setTimeout to give browser time to process
-  setTimeout(function() {
-    executeScripts(scripts, idx + 1, callback);
-  }, 10);
 }
 
+async function doLogout() {
+  APP.user = null;
+  await supabase.auth.signOut();
+  var layout = document.getElementById('app-layout');
+  if (layout) layout.classList.remove('show');
+  showLoginScreen();
+  showToast('Berhasil logout', 'success');
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT APP
+// ════════════════════════════════════════════════════════════
+function initApp() {
+  // Set user info
+  var avatar = document.getElementById('user-avatar');
+  var name = document.getElementById('user-name');
+  var role = document.getElementById('user-role');
+  if (avatar && APP.user) avatar.textContent = (APP.user.nama || 'U')[0].toUpperCase();
+  if (name && APP.user) name.textContent = APP.user.nama || 'User';
+  if (role && APP.user) role.textContent = (APP.user.role || 'Staff') + ' \u2022 ' + (APP.user.tim || '-');
+
+  // Show layout
+  var layout = document.getElementById('app-layout');
+  if (layout) layout.classList.add('show');
+
+  // Load default page
+  showPage('dashboard');
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE ROUTER
+// ════════════════════════════════════════════════════════════
+function showPage(page, el) {
+  APP.currentPage = page;
+
+  // Update active nav
+  var navs = document.querySelectorAll('.nav-item');
+  for (var i = 0; i < navs.length; i++) navs[i].classList.remove('active');
+  if (el) el.classList.add('active');
+
+  var content = document.getElementById('main-content');
+  if (!content) return;
+
+  switch(page) {
+    case 'dashboard': renderDashboard(content); break;
+    case 'assets': renderAssets(content); break;
+    case 'survey': renderSurvey(content); break;
+    case 'inbox': renderInbox(content); break;
+    case 'guests': renderGuests(content); break;
+    case 'maintenance': renderMaintenance(content); break;
+    case 'patrol': renderPatrol(content); break;
+    case 'housekeeping': renderHousekeeping(content); break;
+    default: renderDashboard(content);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: DASHBOARD
+// ════════════════════════════════════════════════════════════
+async function renderDashboard(content) {
+  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat dashboard...</div>';
+
+  try {
+    // Fetch stats in parallel
+    var [assetsRes, bookingsRes, usersRes, kosRes, mainDataRes] = await Promise.all([
+      supabase.from('asset_list').select('*', { count: 'exact', head: true }),
+      supabase.from('asset_booking').select('*', { count: 'exact', head: true }).eq('status_booking', 'Pending'),
+      supabase.from('user_list').select('*', { count: 'exact', head: true }),
+      supabase.from('master_kos').select('*', { count: 'exact', head: true }),
+      supabase.from('main_data').select('*', { count: 'exact', head: true }).eq('status', 'Open')
+    ]);
+
+    var totalAset = assetsRes.count || 0;
+    var pendingBooking = bookingsRes.count || 0;
+    var totalUser = usersRes.count || 0;
+    var totalKos = kosRes.count || 0;
+    var openMaintenance = mainDataRes.count || 0;
+
+    content.innerHTML = renderDashboardHTML(totalAset, pendingBooking, totalUser, totalKos, openMaintenance);
+
+    // Load recent bookings
+    loadRecentBookings();
+
+  } catch(e) {
+    content.innerHTML = renderDashboardHTML(0, 0, 0, 0, 0) +
+      '<div style="color:#f87171;text-align:center;padding:20px;font-size:0.85rem">Gagal memuat data: ' + e.message + '</div>';
+    console.error(e);
+  }
+}
+
+function renderDashboardHTML(totalAset, pendingBooking, totalUser, totalKos, openMaintenance) {
+  return `
+    <div class="page-header">
+      <div class="page-title">Dashboard</div>
+      <div class="page-desc">Overview sistem manajemen operasional GA</div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Aset</div>
+        <div class="stat-value blue">${totalAset}</div>
+        <div class="stat-sub">Aset terdaftar</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Booking Pending</div>
+        <div class="stat-value orange">${pendingBooking}</div>
+        <div class="stat-sub">Menunggu persetujuan</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pengguna</div>
+        <div class="stat-value purple">${totalUser}</div>
+        <div class="stat-sub">User aktif</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Kos Terkelola</div>
+        <div class="stat-value green">${totalKos}</div>
+        <div class="stat-sub">Unit kos aktif</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Maintenance Open</div>
+        <div class="stat-value ${openMaintenance > 0 ? 'red' : 'green'}">${openMaintenance}</div>
+        <div class="stat-sub">Tiket maintenance terbuka</div>
+      </div>
+    </div>
+    <div class="quick-actions">
+      <a class="action-card" href="javascript:void(0)" onclick="showPage('assets', document.querySelectorAll('.nav-item')[1])">
+        <div class="action-icon">&#x1F4CB;</div>
+        <div class="action-title">Cek Aset</div>
+        <div class="action-desc">Lihat ketersediaan & booking aset</div>
+      </a>
+      <a class="action-card" href="javascript:void(0)" onclick="showPage('survey', null)">
+        <div class="action-icon">&#x1F4CA;</div>
+        <div class="action-title">Survey Kepuasan</div>
+        <div class="action-desc">Lihat hasil survey GA</div>
+      </a>
+      <a class="action-card" href="javascript:void(0)" onclick="showPage('inbox', null)">
+        <div class="action-icon">&#x1F4E8;</div>
+        <div class="action-title">Pesanan Masuk</div>
+        <div class="action-desc">Kelola booking aset & pemesanan</div>
+      </a>
+    </div>
+    <div class="section-card">
+      <div class="section-title">&#x1F4C5; Booking Terbaru</div>
+      <div id="recent-bookings"><div style="color:#475569;font-size:0.78rem">Memuat...</div></div>
+    </div>
+  `;
+}
+
+async function loadRecentBookings() {
+  var el = document.getElementById('recent-bookings');
+  if (!el) return;
+
+  try {
+    var res = await supabase.from('asset_booking').select('*').order('id', { ascending: false }).limit(5);
+    if (res.error) throw res.error;
+
+    var data = res.data || [];
+    if (data.length === 0) {
+      el.innerHTML = '<div style="color:#475569;font-size:0.78rem">Belum ada booking</div>';
+      return;
+    }
+
+    el.innerHTML = data.map(function(b) {
+      var dotClass = 'green';
+      if (b.status_booking === 'Pending') dotClass = 'orange';
+      else if (b.status_booking === 'Ditolak' || b.status_booking === 'Batal') dotClass = 'red';
+      return '<div class="activity-item">' +
+        '<div class="activity-dot ' + dotClass + '"></div>' +
+        '<div class="activity-text"><strong>' + escapeHtml(b.nama_peminjam) + '</strong> — ' + escapeHtml(b.nama_aset) +
+        '<br><span style="color:#475569">' + escapeHtml(b.status_booking) + '</span></div>' +
+        '<div class="activity-time">' + formatTime(b.timestamp) + '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) {
+    if (el) el.innerHTML = '<div style="color:#f87171;font-size:0.78rem">Gagal memuat</div>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: ASSETS
+// ════════════════════════════════════════════════════════════
+async function renderAssets(content) {
+  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data aset...</div>';
+  try {
+    var res = await supabase.from('asset_list').select('*').order('id');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+
+    var html = '<div class="page-header"><div class="page-title">Ketersediaan Aset</div><div class="page-desc">Total ' + data.length + ' aset terdaftar</div></div>';
+    html += '<div class="stats-grid">';
+    var tersedia = data.filter(function(a) { return a.status_operasional === 'Tersedia'; }).length;
+    var dipakai = data.filter(function(a) { return a.status_operasional !== 'Tersedia'; }).length;
+    html += '<div class="stat-card"><div class="stat-label">Tersedia</div><div class="stat-value green">' + tersedia + '</div></div>';
+    html += '<div class="stat-card"><div class="stat-label">Digunakan/Rusak</div><div class="stat-value red">' + dipakai + '</div></div>';
+    html += '</div>';
+
+    html += '<div class="section-card">';
+    data.forEach(function(a) {
+      var statusColor = a.status_operasional === 'Tersedia' ? '#34d399' : '#f87171';
+      html += '<div class="activity-item">' +
+        '<div class="activity-dot" style="background:' + statusColor + '"></div>' +
+        '<div class="activity-text"><strong>' + escapeHtml(a.nama_aset) + '</strong>' +
+        '<br><span style="color:#64748b">' + escapeHtml(a.kategori) + ' — ' + escapeHtml(a.detail_kapasitas || '-') + '</span></div>' +
+        '<div class="activity-time" style="color:' + statusColor + '">' + escapeHtml(a.status_operasional) + '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = '<div style="color:#f87171;text-align:center;padding:40px">Error: ' + e.message + '</div>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: SURVEY
+// ════════════════════════════════════════════════════════════
+async function renderSurvey(content) {
+  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data survey...</div>';
+  try {
+    var res = await supabase.from('survey_ga').select('*').order('id', { ascending: false }).limit(20);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+
+    var html = '<div class="page-header"><div class="page-title">Survey Kepuasan GA</div><div class="page-desc">Hasil penilaian layanan General Affair</div></div>';
+    html += '<div class="stats-grid">';
+    html += '<div class="stat-card"><div class="stat-label">Total Survey</div><div class="stat-value blue">' + data.length + '</div></div>';
+    var avg = data.length > 0 ? (data.reduce(function(s, r) {
+      return s + (r.keramahan || 0) + (r.fast_response || 0) + (r['3s'] || 0) + (r.kualitas_kerja || 0) + (r.komunikasi || 0);
+    }, 0) / (data.length * 5)).toFixed(1) : 0;
+    html += '<div class="stat-card"><div class="stat-label">Rata-rata Rating</div><div class="stat-value purple">' + avg + '</div></div>';
+    html += '</div>';
+
+    data.forEach(function(s) {
+      html += '<div class="section-card" style="margin-bottom:10px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html += '<div><strong>' + escapeHtml(s.divisi || '-') + '</strong> <span style="color:#64748b;font-size:0.75rem">' + escapeHtml(s.tim_dinilai || '-') + '</span></div>';
+      html += '<div style="color:#a78bfa;font-size:0.8rem">Periode: ' + escapeHtml(s.periode || '-') + '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:12px;font-size:0.78rem;color:#94a3b8;flex-wrap:wrap">';
+      html += '<span>Keramahan: ' + (s.keramahan || '-') + '</span>';
+      html += '<span>Fast Response: ' + (s.fast_response || '-') + '</span>';
+      html += '<span>3S: ' + (s['3s'] || '-') + '</span>';
+      html += '<span>Kualitas: ' + (s.kualitas_kerja || '-') + '</span>';
+      html += '<span>Komunikasi: ' + (s.komunikasi || '-') + '</span>';
+      html += '</div>';
+      html += '<div style="margin-top:6px;font-size:0.75rem;color:#475569">' + escapeHtml(s.feedback || '') + '</div>';
+      html += '</div>';
+    });
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = '<div style="color:#f87171;text-align:center;padding:40px">Error: ' + e.message + '</div>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: INBOX (placeholder)
+// ════════════════════════════════════════════════════════════
+function renderInbox(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Pesanan Masuk</div><div class="page-desc">Booking & permintaan aset</div></div>' +
+    '<div class="section-card"><div style="color:#64748b;text-align:center;padding:20px">Fitur akan segera hadir</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: GUESTS (placeholder)
+// ════════════════════════════════════════════════════════════
+function renderGuests(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Tamu Kos</div><div class="page-desc">Manajemen penghuni kos</div></div>' +
+    '<div class="section-card"><div style="color:#64748b;text-align:center;padding:20px">Fitur akan segera hadir</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: MAINTENANCE (placeholder)
+// ════════════════════════════════════════════════════════════
+function renderMaintenance(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Maintenance</div><div class="page-desc">Tiket perbaikan & pemeliharaan</div></div>' +
+    '<div class="section-card"><div style="color:#64748b;text-align:center;padding:20px">Fitur akan segera hadir</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: PATROL (placeholder)
+// ════════════════════════════════════════════════════════════
+function renderPatrol(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Patroli</div><div class="page-desc">Log patroli keamanan</div></div>' +
+    '<div class="section-card"><div style="color:#64748b;text-align:center;padding:20px">Fitur akan segera hadir</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: HOUSEKEEPING (placeholder)
+// ════════════════════════════════════════════════════════════
+function renderHousekeeping(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Housekeeping</div><div class="page-desc">Audit & checklist kebersihan</div></div>' +
+    '<div class="section-card"><div style="color:#64748b;text-align:center;padding:20px">Fitur akan segera hadir</div></div>';
+}
+
+// ════════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════════
 function hideLoading() {
   var ls = document.getElementById('loading-screen');
   if (ls) ls.classList.add('hidden');
 }
 
 function showLoginScreen() {
-  hideLoading();
   var ls = document.getElementById('login-screen');
   if (ls) ls.classList.add('show');
 }
 
-// ─── AUTH FUNCTIONS (used before CDN app loads) ───────────
-function switchLoginTab(mode) {
-  var tabs = document.querySelectorAll('.login-tab');
-  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
-  var sso = document.getElementById('login-sso-panel');
-  var manual = document.getElementById('login-manual-panel');
-  if (mode === 'sso') {
-    sso.style.display = 'block'; manual.style.display = 'none'; tabs[0].classList.add('active');
-  } else {
-    sso.style.display = 'none'; manual.style.display = 'block'; tabs[1].classList.add('active');
-  }
-  document.getElementById('login-error').classList.remove('show');
-}
-
-function doGoogleSSO() {
-  var btn = document.getElementById('btn-sso');
-  btn.disabled = true; btn.textContent = '⏳ Memproses...';
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.textContent = 'Login dengan Google Account';
-      if (res.success && res.data) {
-        // Reload - CDN app will detect session and init
-        location.reload();
-      } else {
-        showLoginError(res.error || 'Login gagal');
-      }
-    })
-    .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = 'Login dengan Google Account';
-      showLoginError(e.message);
-    })
-    .loginWithGoogleSSO();
-}
-
-function doManualLogin() {
-  var email = document.getElementById('login-email').value.trim();
-  var password = document.getElementById('login-password').value;
-  if (!email || !password) { showLoginError('Email dan password wajib diisi.'); return; }
-  var btn = document.getElementById('btn-manual-login');
-  btn.disabled = true; btn.textContent = '⏳ Memproses...';
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.textContent = 'Login';
-      if (res.success && res.data) {
-        try { localStorage.setItem('ga_session', JSON.stringify(res.data)); } catch(e) {}
-        // Panggil handleLoginSuccess langsung (dari CDN JS yang sudah di-load)
-        if (typeof handleLoginSuccess === 'function') {
-          handleLoginSuccess(res.data);
-        } else {
-          location.reload(); // fallback
-        }
-      } else {
-        showLoginError(res.error || 'Login gagal');
-      }
-    })
-    .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = 'Login';
-      showLoginError(e.message);
-    })
-    .loginWithEmailAndPassword(email, password);
+function hideLoginScreen() {
+  var ls = document.getElementById('login-screen');
+  if (ls) ls.classList.remove('show');
 }
 
 function showLoginError(msg) {
   var el = document.getElementById('login-error');
-  el.textContent = msg; el.classList.add('show');
+  if (el) { el.textContent = msg; el.classList.add('show'); }
 }
 
-// ─── BOOT ──────────────────────────────────────────────────
-// Start: load app from CDN
-loadAppFromCDN();
+function showToast(msg, type) {
+  type = type || 'success';
+  var c = document.getElementById('toast-container');
+  if (!c) return;
+  var t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function() {
+    t.style.transition = 'all 0.4s ease';
+    requestAnimationFrame(function() { t.style.opacity = '0'; t.style.transform = 'translateX(50px)'; });
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 500);
+  }, 3000);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  try {
+    var d = new Date(ts);
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+  } catch(e) { return ts; }
+}
 </script>
 </body>
 </html>
