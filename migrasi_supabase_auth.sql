@@ -11,8 +11,8 @@ ALTER TABLE user_list ADD COLUMN IF NOT EXISTS auth_id UUID;
 -- Password default: 'GAops2026!' — WAJIB ganti setelah login
 
 -- admin@ga.com (Admin)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'admin@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Administrator","role":"Admin","tim":"Management"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'admin@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Administrator","role":"Admin","tim":"Management"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'admin@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'admin@ga.com'), 'email', 'admin@ga.com', NOW(), NOW()
@@ -21,8 +21,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'admin@ga.com'
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'admin@ga.com') WHERE email = 'admin@ga.com';
 
 -- supervisor@ga.com (Supervisor)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'supervisor@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Supervisor GA","role":"Supervisor","tim":"Management"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'supervisor@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Supervisor GA","role":"Supervisor","tim":"Management"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'supervisor@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'supervisor@ga.com'), 'email', 'supervisor@ga.com', NOW(), NOW()
@@ -31,8 +31,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'supervisor@ga
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'supervisor@ga.com') WHERE email = 'supervisor@ga.com';
 
 -- ahmad@ga.com (Staff Maintenance)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'ahmad@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Ahmad Teknisi","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'ahmad@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Ahmad Teknisi","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'ahmad@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'ahmad@ga.com'), 'email', 'ahmad@ga.com', NOW(), NOW()
@@ -41,8 +41,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'ahmad@ga.com'
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'ahmad@ga.com') WHERE email = 'ahmad@ga.com';
 
 -- budi@ga.com (Staff Security)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'budi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Budi Security","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'budi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Budi Security","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'budi@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'budi@ga.com'), 'email', 'budi@ga.com', NOW(), NOW()
@@ -51,8 +51,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'budi@ga.com')
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'budi@ga.com') WHERE email = 'budi@ga.com';
 
 -- citra@ga.com (Staff Housekeeping)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'citra@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Citra CS","role":"Staff","tim":"Housekeeping"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'citra@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Citra CS","role":"Staff","tim":"Housekeeping"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'citra@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'citra@ga.com'), 'email', 'citra@ga.com', NOW(), NOW()
@@ -61,8 +61,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'citra@ga.com'
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'citra@ga.com') WHERE email = 'citra@ga.com';
 
 -- dewi@ga.com (Staff General Services)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'dewi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Dewi CS","role":"Staff","tim":"General Services"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'dewi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Dewi CS","role":"Staff","tim":"General Services"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'dewi@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'dewi@ga.com'), 'email', 'dewi@ga.com', NOW(), NOW()
@@ -71,8 +71,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'dewi@ga.com')
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'dewi@ga.com') WHERE email = 'dewi@ga.com';
 
 -- project421f@gmail.com (Arif - Admin)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'project421f@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Arif","role":"Admin","tim":"Management"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'project421f@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Arif","role":"Admin","tim":"Management"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'project421f@gmail.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'project421f@gmail.com'), 'email', 'project421f@gmail.com', NOW(), NOW()
@@ -81,8 +81,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'project421f@g
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'project421f@gmail.com') WHERE email = 'project421f@gmail.com';
 
 -- imronfariel@gmail.com (Imron - Staff Security)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'imronfariel@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Imron","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'imronfariel@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Imron","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'imronfariel@gmail.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'imronfariel@gmail.com'), 'email', 'imronfariel@gmail.com', NOW(), NOW()
@@ -91,8 +91,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'imronfariel@g
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'imronfariel@gmail.com') WHERE email = 'imronfariel@gmail.com';
 
 -- ardi@ga.com (Ardi - Staff Maintenance)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'ardi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Ardi","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'ardi@ga.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Ardi","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'ardi@ga.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'ardi@ga.com'), 'email', 'ardi@ga.com', NOW(), NOW()
@@ -101,8 +101,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'ardi@ga.com')
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'ardi@ga.com') WHERE email = 'ardi@ga.com';
 
 -- amrh209081977@gmail.com (Udin - Staff Maintenance)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'amrh209081977@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Udin","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'amrh209081977@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Udin","role":"Staff","tim":"Maintenance"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'amrh209081977@gmail.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'amrh209081977@gmail.com'), 'email', 'amrh209081977@gmail.com', NOW(), NOW()
@@ -111,8 +111,8 @@ AND NOT EXISTS (SELECT 1 FROM auth.identities WHERE provider_id = 'amrh209081977
 UPDATE user_list SET auth_id = (SELECT id FROM auth.users WHERE email = 'amrh209081977@gmail.com') WHERE email = 'amrh209081977@gmail.com';
 
 -- lcpcandra@gmail.com (Hanafi Candra - Staff Security)
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
-SELECT gen_random_uuid(), 'lcpcandra@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Hanafi Candra","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
+INSERT INTO auth.users (instance_id, id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, role, aud)
+SELECT '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'lcpcandra@gmail.com', crypt('GAops2026!', gen_salt('bf')), NOW(), NOW(), NOW(), '{"provider":"email","providers":["email"]}', '{"nama":"Hanafi Candra","role":"Staff","tim":"Security"}', 'authenticated', 'authenticated'
 WHERE NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'lcpcandra@gmail.com');
 INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, created_at, updated_at)
 SELECT gen_random_uuid(), id, jsonb_build_object('sub', id, 'email', 'lcpcandra@gmail.com'), 'email', 'lcpcandra@gmail.com', NOW(), NOW()
