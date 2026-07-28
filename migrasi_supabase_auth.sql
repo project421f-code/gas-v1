@@ -136,99 +136,88 @@ CREATE INDEX IF NOT EXISTS idx_user_list_auth_id ON user_list(auth_id);
 -- HAPUS POLICY PUBLIC READ YANG LAMA (dari Phase 1)
 -- Ganti dengan: Public bisa SELECT, Authenticated bisa INSERT/UPDATE/DELETE
 
+-- Hapus semua policy yang mungkin sudah ada (idempotent)
+DO $$ DECLARE pol RECORD; BEGIN
+  FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' AND policyname LIKE 'Auth users%' OR policyname = 'Public read access' OR policyname LIKE 'Allow public%' LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+  END LOOP;
+END $$;
+
 -- TABLE: asset_list
-DROP POLICY IF EXISTS "Allow public SELECT on asset_list" ON asset_list;
 CREATE POLICY "Public read access" ON asset_list FOR SELECT USING (true);
 CREATE POLICY "Auth users can insert" ON asset_list FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Auth users can update" ON asset_list FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Auth users can delete" ON asset_list FOR DELETE TO authenticated USING (true);
 
 -- TABLE: user_list
-DROP POLICY IF EXISTS "Allow public SELECT on user_list" ON user_list;
 CREATE POLICY "Public read access" ON user_list FOR SELECT USING (true);
 CREATE POLICY "Users can update own data" ON user_list FOR UPDATE 
   TO authenticated USING (auth_id = auth.uid()) WITH CHECK (auth_id = auth.uid());
 
 -- TABLE: asset_booking
-DROP POLICY IF EXISTS "Allow public SELECT on asset_booking" ON asset_booking;
 CREATE POLICY "Public read access" ON asset_booking FOR SELECT USING (true);
 CREATE POLICY "Auth users can insert booking" ON asset_booking FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Auth users can update booking" ON asset_booking FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Auth users can delete booking" ON asset_booking FOR DELETE TO authenticated USING (true);
 
 -- TABLE: master_kos
-DROP POLICY IF EXISTS "Allow public SELECT on master_kos" ON master_kos;
 CREATE POLICY "Public read access" ON master_kos FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage kos" ON master_kos FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_kamar
-DROP POLICY IF EXISTS "Allow public SELECT on master_kamar" ON master_kamar;
 CREATE POLICY "Public read access" ON master_kamar FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage kamar" ON master_kamar FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_sla
-DROP POLICY IF EXISTS "Allow public SELECT on master_sla" ON master_sla;
 CREATE POLICY "Public read access" ON master_sla FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage SLA" ON master_sla FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_cs_schedule
-DROP POLICY IF EXISTS "Allow public SELECT on master_cs_schedule" ON master_cs_schedule;
 CREATE POLICY "Public read access" ON master_cs_schedule FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage CS schedule" ON master_cs_schedule FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: patrol_log
-DROP POLICY IF EXISTS "Allow public SELECT on patrol_log" ON patrol_log;
 CREATE POLICY "Public read access" ON patrol_log FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage patrol" ON patrol_log FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: asset_inspection
-DROP POLICY IF EXISTS "Allow public SELECT on asset_inspection" ON asset_inspection;
 CREATE POLICY "Public read access" ON asset_inspection FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage inspection" ON asset_inspection FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: main_data
-DROP POLICY IF EXISTS "Allow public SELECT on main_data" ON main_data;
 CREATE POLICY "Public read access" ON main_data FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage maintenance" ON main_data FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: cs_daily_checklist
-DROP POLICY IF EXISTS "Allow public SELECT on cs_daily_checklist" ON cs_daily_checklist;
 CREATE POLICY "Public read access" ON cs_daily_checklist FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage checklist" ON cs_daily_checklist FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: audit_housekeeping
-DROP POLICY IF EXISTS "Allow public SELECT on audit_housekeeping" ON audit_housekeeping;
 CREATE POLICY "Public read access" ON audit_housekeeping FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage audit" ON audit_housekeeping FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: gc_execution
-DROP POLICY IF EXISTS "Allow public SELECT on gc_execution" ON gc_execution;
 CREATE POLICY "Public read access" ON gc_execution FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage GC" ON gc_execution FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: survey_ga
-DROP POLICY IF EXISTS "Allow public SELECT on survey_ga" ON survey_ga;
 CREATE POLICY "Public read access" ON survey_ga FOR SELECT USING (true);
 CREATE POLICY "Auth users can insert survey" ON survey_ga FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "Auth users can update survey" ON survey_ga FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_patrol_checkpoints
-DROP POLICY IF EXISTS "Allow public SELECT on master_patrol_checkpoints" ON master_patrol_checkpoints;
 CREATE POLICY "Public read access" ON master_patrol_checkpoints FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage" ON master_patrol_checkpoints FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_patrol_schedule
-DROP POLICY IF EXISTS "Allow public SELECT on master_patrol_schedule" ON master_patrol_schedule;
 CREATE POLICY "Public read access" ON master_patrol_schedule FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage" ON master_patrol_schedule FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: master_survey_config
-DROP POLICY IF EXISTS "Allow public SELECT on master_survey_config" ON master_survey_config;
 CREATE POLICY "Public read access" ON master_survey_config FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage" ON master_survey_config FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- TABLE: kpi_security
-DROP POLICY IF EXISTS "Allow public SELECT on kpi_security" ON kpi_security;
 CREATE POLICY "Public read access" ON kpi_security FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage" ON kpi_security FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
