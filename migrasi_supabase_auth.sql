@@ -195,10 +195,9 @@ DROP POLICY IF EXISTS "Allow public SELECT on kpi_security" ON kpi_security;
 CREATE POLICY "Public read access" ON kpi_security FOR SELECT USING (true);
 CREATE POLICY "Auth users can manage" ON kpi_security FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- TABLE: kpi_mnt
-DROP POLICY IF EXISTS "Allow public SELECT on kpi_mnt" ON kpi_mnt;
-CREATE POLICY "Public read access" ON kpi_mnt FOR SELECT USING (true);
-CREATE POLICY "Auth users can manage" ON kpi_mnt FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- TABLE: kpi_mnt (di-skip karena tabel tidak ada di project ini)
+-- Error sebelumnya: relation "kpi_mnt" does not exist
+-- Hapus baris ini jika suatu saat tabel kpi_mnt dibuat
 
 -- ═══════════════════════════════════════════════════════════════
 -- VERIFIKASI
