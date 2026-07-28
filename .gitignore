@@ -8,3 +8,4 @@
 !/logo_preview.html
 !/migrasi_supabase_auth.sql
 !/add_superadmin_user.sql
+!/migrasi_tabel_baru.sql
