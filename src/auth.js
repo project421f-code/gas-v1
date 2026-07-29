@@ -7,6 +7,14 @@ async function doLogin() {
   var btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = '\u23F3 Memproses...';
 
+  // Check if Supabase is ready
+  if (!supabaseReady || !supabase) {
+    btn.disabled = false; btn.textContent = 'Login';
+    showLoginError('Gagal: Library Supabase tidak terload. Coba refresh halaman atau periksa koneksi internet.');
+    console.error('Supabase not ready. CDN may have failed to load.');
+    return;
+  }
+
   try {
     // Use Supabase Auth to sign in
     var authRes = await supabase.auth.signInWithPassword({ email: email, password: password });
@@ -47,8 +55,19 @@ async function doLogin() {
 
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Login';
-    showLoginError('Gagal terhubung ke server. Periksa koneksi.');
-    console.error(e);
+    // Show actual error for debugging
+    var msg = 'Gagal terhubung ke server.';
+    if (e.message) {
+      if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+        msg += ' Periksa koneksi internet.';
+      } else if (e.message.includes('timeout') || e.message.includes('timed out')) {
+        msg += ' Koneksi timeout. Coba lagi.';
+      } else {
+        msg += ' ' + e.message;
+      }
+    }
+    showLoginError(msg);
+    console.error('Login error:', e);
   }
 }
 
