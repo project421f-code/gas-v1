@@ -7,7 +7,7 @@ var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 var supabase = null;
 var supabaseReady = false;
 try {
-  if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+  if (typeof window.supabase !== 'undefined' && window.supabase !== null && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     supabaseReady = true;
   }
