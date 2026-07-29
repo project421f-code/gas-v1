@@ -157,6 +157,32 @@ function generateMobileMenu() {
     btn.onclick = function() { navigateToPage(m.page); };
     grid.appendChild(btn);
   });
+
+  // Add separator + dark mode + logout at bottom
+  var sep = document.createElement('div');
+  sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.06);margin:12px 0 8px';
+  grid.parentNode.appendChild(sep);
+
+  var bottomRow = document.createElement('div');
+  bottomRow.style.cssText = 'display:flex;gap:8px;margin-top:4px';
+
+  // Dark mode toggle
+  var dmBtn = document.createElement('button');
+  dmBtn.className = 'mobile-sheet-item';
+  dmBtn.style.cssText = 'flex:1;flex-direction:row;justify-content:center;padding:12px 8px';
+  dmBtn.innerHTML = '<span class="ms-icon" id="ms-dark-icon">' + (APP.darkMode ? '\u2600\uFE0F' : '\uD83C\uDF19') + '</span><span id="ms-dark-label">' + (APP.darkMode ? 'Mode Terang' : 'Mode Gelap') + '</span>';
+  dmBtn.onclick = function() { toggleDarkMode(); closeMobileSheet(); };
+  bottomRow.appendChild(dmBtn);
+
+  // Logout
+  var loBtn = document.createElement('button');
+  loBtn.className = 'mobile-sheet-item';
+  loBtn.style.cssText = 'flex:1;flex-direction:row;justify-content:center;padding:12px 8px;color:#ef4444';
+  loBtn.innerHTML = '<span class="ms-icon">\uD83D\uDEAA</span>Logout';
+  loBtn.onclick = function() { closeMobileSheet(); doLogout(); };
+  bottomRow.appendChild(loBtn);
+
+  grid.parentNode.appendChild(bottomRow);
 }
 
 // ════════════════════════════════════════════════════════════

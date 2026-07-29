@@ -30,6 +30,11 @@ function toggleDarkMode() {
   var label = document.getElementById('darkmode-label');
   if (icon) icon.textContent = APP.darkMode ? '\u2600\uFE0F' : '\uD83C\uDF19';
   if (label) label.textContent = APP.darkMode ? 'Mode Terang' : 'Mode Gelap';
+  // Update mobile sheet toggle as well
+  var msIcon = document.getElementById('ms-dark-icon');
+  var msLabel = document.getElementById('ms-dark-label');
+  if (msIcon) msIcon.textContent = APP.darkMode ? '\u2600\uFE0F' : '\uD83C\uDF19';
+  if (msLabel) msLabel.textContent = APP.darkMode ? 'Mode Terang' : 'Mode Gelap';
 }
 
 // ── Clock ──
