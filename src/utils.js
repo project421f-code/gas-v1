@@ -25,6 +25,11 @@ function toggleDarkMode() {
     document.documentElement.removeAttribute('data-theme');
     localStorage.setItem('ga_darkmode', '');
   }
+  // Update sidebar toggle label/icon
+  var icon = document.getElementById('darkmode-icon');
+  var label = document.getElementById('darkmode-label');
+  if (icon) icon.textContent = APP.darkMode ? '\u2600\uFE0F' : '\uD83C\uDF19';
+  if (label) label.textContent = APP.darkMode ? 'Mode Terang' : 'Mode Gelap';
 }
 
 // ── Clock ──
