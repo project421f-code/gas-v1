@@ -197,7 +197,7 @@ function filterMnt(status) {
 }
 
 async function renderMaintenance(content) {
-  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data maintenance...</div>';
+  content.innerHTML = renderSkeleton('cards');
 
   // Always show header + tabs
   var html = '<div class="page-header"><div class="page-title">Maintenance</div><div class="page-desc">Tiket perbaikan & pemeliharaan</div></div>';

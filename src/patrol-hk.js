@@ -30,7 +30,7 @@ function showPatrolCPDetail(i) {
 }
 
 async function renderPatrol(content) {
-  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data patroli...</div>';
+  content.innerHTML = renderSkeleton('stats');
   var html = '<div class="page-header"><div class="page-title">Patroli</div><div class="page-desc">Log patroli keamanan & KPI Security</div></div>';
   html += '<div style="display:flex;gap:6px;margin-bottom:14px">';
   [
@@ -168,7 +168,7 @@ function showHKDetailGC(i) {
 }
 
 async function renderHousekeeping(content) {
-  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data housekeeping...</div>';
+  content.innerHTML = renderSkeleton('stats');
   try {
     var [csRes, auditRes, gcRes] = await Promise.all([
       supabase.from('cs_daily_checklist').select('*').order('created_at', { ascending: false }),

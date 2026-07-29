@@ -1,5 +1,5 @@
 async function renderDashboard(content) {
-  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat dashboard...</div>';
+  content.innerHTML = renderSkeleton('dashboard');
 
   try {
     // Fetch stats in parallel
@@ -81,7 +81,7 @@ function renderDashboardHTML(totalAset, pendingBooking, totalUser, totalKos, ope
     </div>
     <div class="section-card">
       <div class="section-title">&#x1F4C5; Booking Terbaru</div>
-      <div id="recent-bookings"><div style="color:#475569;font-size:0.78rem">Memuat...</div></div>
+      <div id="recent-bookings">' + renderSkeleton('table') + '</div>
     </div>
   `;
 }
@@ -131,7 +131,7 @@ function switchAssetsTab(tab) {
 }
 
 async function renderAssets(content) {
-  content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat...</div>';
+  content.innerHTML = renderSkeleton('stats');
   var html = '<div class="page-header"><div class="page-title">Ketersediaan Aset</div><div class="page-desc">Daftar aset & inspeksi kendaraan</div></div>';
   html += '<div style="display:flex;gap:6px;margin-bottom:14px">';
   [

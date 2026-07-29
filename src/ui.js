@@ -1,3 +1,35 @@
+// ════════════════════════════════════════════════════════════
+// SKELETON LOADING HELPERS
+// ════════════════════════════════════════════════════════════
+
+function renderSkeleton(type) {
+  var types = {
+    dashboard: '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px">' +
+      '<div class="skeleton skeleton-stat"></div>'.repeat(5) +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:24px">' +
+      '<div class="skeleton skeleton-card"></div>'.repeat(3) +
+      '</div>' +
+      '<div class="skeleton skeleton-card" style="height:200px"></div>',
+    list: '<div class="table-wrap">' +
+      '<div class="skeleton skeleton-table-row"></div>'.repeat(5) +
+      '</div>',
+    cards: '<div style="display:grid;gap:8px">' +
+      '<div class="skeleton skeleton-card" style="height:60px"></div>'.repeat(4) +
+      '</div>',
+    stats: '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px">' +
+      '<div class="skeleton skeleton-stat"></div>'.repeat(4) +
+      '</div>',
+    table: '<div class="skeleton skeleton-table-row"></div>'.repeat(6),
+    form: '<div style="display:grid;gap:16px">' +
+      '<div class="skeleton skeleton-h2" style="width:30%"></div>' +
+      '<div class="skeleton skeleton-text"></div>'.repeat(3) +
+      '<div class="skeleton skeleton-button"></div>' +
+      '</div>'
+  };
+  return types[type] || types.cards;
+}
+
 function hideLoading() {
   var ls = document.getElementById('loading-screen');
   if (ls) ls.classList.add('hidden');

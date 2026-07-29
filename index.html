@@ -473,6 +473,32 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .qr-card-label { font-size: 0.82rem; font-weight: 600; color: #e0e7ff; }
 .qr-card-sub { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
 
+/* ── SKELETON LOADING ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px; color: transparent !important; user-select: none;
+  pointer-events: none;
+}
+.skeleton-inline { display: inline-block; vertical-align: middle; }
+.skeleton-block { display: block; width: 100%; }
+.skeleton-h1 { height: 28px; width: 60%; margin-bottom: 8px; }
+.skeleton-h2 { height: 22px; width: 45%; margin-bottom: 6px; }
+.skeleton-h3 { height: 18px; width: 35%; margin-bottom: 4px; }
+.skeleton-text { height: 14px; width: 100%; margin-bottom: 8px; }
+.skeleton-text-short { height: 14px; width: 60%; margin-bottom: 8px; }
+.skeleton-card { height: 100px; width: 100%; }
+.skeleton-stat { height: 80px; border-radius: 14px; }
+.skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.skeleton-button { height: 40px; width: 120px; border-radius: 10px; }
+.skeleton-icon { width: 36px; height: 36px; border-radius: 10px; display: inline-block; }
+.skeleton-table-row { height: 48px; width: 100%; margin-bottom: 8px; }
+
 /* ── TOAST WARNING ── */
 .toast.warning { background: rgba(245,158,11,0.95); color: #78350f; }
 .toast.removing { animation: toast-out 0.3s ease forwards; }
