@@ -397,7 +397,22 @@ td.actions { white-space: nowrap; }
   font-family: var(--font); font-size: 0.85rem; transition: all 0.2s; outline: none;
 }
 .form-control:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
-select.form-control { appearance: auto; }
+select.form-control, select.login-input {
+  appearance: auto;
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  cursor: pointer;
+}
+select.form-control option, select.login-input option {
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 8px 12px;
+}
+select.form-control option:hover, select.login-input option:hover,
+select.form-control option:checked, select.login-input option:checked {
+  background: #6366f1;
+  color: #fff;
+}
 textarea.form-control { resize: vertical; min-height: 80px; }
 
 /* ── FILTER CHIPS ── */
@@ -835,6 +850,9 @@ function initApp() {
 
   // Load default page
   showPage('dashboard');
+
+  // Load open ticket badge
+  loadOpenTicketBadge();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2053,9 +2071,12 @@ async function renderMaintenance(content) {
         'border:1px solid ' + (active ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)') + ';' +
         'padding:6px 16px;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:' + (active ? '600' : '500') + '">' + f + '</button>';
     });
-    html += '<button onclick="showComplaintForm()" style="margin-left:auto;' +
+    html += '<button onclick="showComplaintForm()" style="' +
       'background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border:none;' +
       'padding:6px 16px;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:600">+ Tiket Baru</button>';
+    html += '<button onclick="exportTicketsCSV()" style="' +
+      'background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);' +
+      'padding:6px 12px;border-radius:10px;cursor:pointer;font-size:0.72rem;font-weight:600">&#x1F4E5; Export CSV</button>';
     html += '</div>';
 
     html += '<div class="section-card">';
@@ -2081,10 +2102,14 @@ async function renderMaintenance(content) {
         if (m.teknisi) html += '<br><span style="color:#475569">Teknisi: ' + escapeHtml(m.teknisi) + '</span>';
         html += '</div>';
         html += '<div style="display:flex;gap:4px;align-items:center;flex-shrink:0">';
+        html += '<button onclick="sendTicketWA(\'' + m.tiket_id + '\')" style="background:rgba(16,185,129,0.12);color:#6ee7b7;border:none;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:0.65rem" title="Kirim WA">&#x1F4E8;</button>';
         if (m.status !== 'Selesai') {
           html += '<button onclick="showComplaintForm(' + idx + ')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:none;padding:4px 8px;border-radius:8px;cursor:pointer;font-size:0.7rem">Edit</button>';
           html += '<button onclick="showUpdateStatusForm(' + idx + ')" style="background:rgba(251,191,36,0.15);color:#fcd34d;border:none;padding:4px 8px;border-radius:8px;cursor:pointer;font-size:0.7rem">Update</button>';
+        } else {
+          html += '<button onclick="showComplaintForm(' + idx + ')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:none;padding:4px 8px;border-radius:8px;cursor:pointer;font-size:0.7rem">Detail</button>';
         }
+        html += '<button onclick="showDeleteTicketConfirm(\'' + m.tiket_id + '\')" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:none;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:0.65rem" title="Hapus">&#x1F5D1;</button>';
         html += '<div class="activity-time" style="color:' + statusColor + '">' + escapeHtml(m.status) + '</div>';
         html += '</div>';
         html += '</div>';
@@ -2118,7 +2143,10 @@ function showComplaintForm(idx) {
   document.getElementById('cf-urgensi').value = isEdit ? (data.urgensi || '') : '';
   document.getElementById('cf-deskripsi').value = isEdit ? (data.deskripsi || '') : '';
   document.getElementById('cf-foto').value = isEdit ? (data.foto_kerusakan || '') : '';
+  document.getElementById('foto-preview-complaint').style.display = 'none';
   document.getElementById('complaint-error').style.display = 'none';
+  // Stop camera if active
+  stopCameraComplaint();
 
   // Load sub-kategori AFTER setting kategori (loadSubKategori replaces innerHTML)
   if (document.getElementById('cf-kategori').value) {
@@ -2237,7 +2265,10 @@ function showUpdateStatusForm(idx) {
   document.getElementById('sf-teknisi').value = (APP.user && APP.user.nama) || '';
   document.getElementById('sf-catatan').value = '';
   document.getElementById('sf-foto').value = '';
+  document.getElementById('foto-preview-status').style.display = 'none';
   document.getElementById('status-error').style.display = 'none';
+  // Stop camera if active
+  stopCameraStatus();
   overlay.classList.add('show');
 }
 
@@ -2285,7 +2316,433 @@ async function doUpdateStatus() {
     btn.textContent = '\uD83D\uDCBE Update';
   }
 }
-// PAGE: PATROL — Log Patroli (patrol_log, master_patrol_checkpoints)
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Camera Functions
+// ════════════════════════════════════════════════════════════
+var _cameraStreamStatus = null;
+
+function toggleCameraStatus() {
+  var container = document.getElementById('camera-container-status');
+  var btn = document.getElementById('btn-camera-status');
+  if (!container || !btn) return;
+
+  if (_cameraStreamStatus) {
+    // Camera is on, stop it
+    stopCameraStatus();
+    return;
+  }
+
+  // Start camera
+  container.style.display = 'block';
+  btn.innerHTML = '&#x23F3; Memuat kamera...';
+  btn.disabled = true;
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(function(stream) {
+        _cameraStreamStatus = stream;
+        var video = document.getElementById('camera-preview-status');
+        if (video) {
+          video.srcObject = stream;
+          video.play();
+        }
+        btn.innerHTML = '&#x25B6; Kamera Nyala';
+        btn.style.background = 'rgba(16,185,129,0.2)';
+        btn.style.color = '#6ee7b7';
+        btn.style.borderColor = 'rgba(16,185,129,0.4)';
+        btn.disabled = false;
+      })
+      .catch(function(err) {
+        container.style.display = 'none';
+        btn.innerHTML = '&#x1F4F7; Buka Kamera';
+        btn.style.background = 'rgba(99,102,241,0.15)';
+        btn.style.color = '#a5b4fc';
+        btn.style.borderColor = 'rgba(99,102,241,0.3)';
+        btn.disabled = false;
+        showToast('Kamera tidak tersedia: ' + err.message, 'error');
+      });
+  } else {
+    container.style.display = 'none';
+    btn.innerHTML = '&#x1F4F7; Buka Kamera';
+    btn.style.background = 'rgba(99,102,241,0.15)';
+    btn.style.color = '#a5b4fc';
+    btn.disabled = false;
+    showToast('Browser tidak mendukung akses kamera', 'error');
+  }
+}
+
+function capturePhotoStatus() {
+  var video = document.getElementById('camera-preview-status');
+  var canvas = document.getElementById('canvas-status');
+  if (!video || !canvas) return;
+
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // Convert to base64 data URL (JPEG, quality 0.7)
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+  // Set the foto input value
+  var fotoInput = document.getElementById('sf-foto');
+  if (fotoInput) {
+    fotoInput.value = dataUrl;
+  }
+
+  // Show preview
+  var previewContainer = document.getElementById('foto-preview-status');
+  var previewImg = document.getElementById('foto-img-preview-status');
+  if (previewContainer && previewImg) {
+    previewImg.src = dataUrl;
+    previewContainer.style.display = 'block';
+  }
+
+  // Stop camera after capture
+  stopCameraStatus();
+
+  showToast('Foto berhasil diambil!', 'success');
+}
+
+function stopCameraStatus() {
+  var container = document.getElementById('camera-container-status');
+  var btn = document.getElementById('btn-camera-status');
+
+  if (_cameraStreamStatus) {
+    _cameraStreamStatus.getTracks().forEach(function(track) { track.stop(); });
+    _cameraStreamStatus = null;
+  }
+
+  var video = document.getElementById('camera-preview-status');
+  if (video) {
+    video.srcObject = null;
+  }
+
+  if (container) container.style.display = 'none';
+  if (btn) {
+    btn.innerHTML = '&#x1F4F7; Buka Kamera';
+    btn.style.background = 'rgba(99,102,241,0.15)';
+    btn.style.color = '#a5b4fc';
+    btn.style.borderColor = 'rgba(99,102,241,0.3)';
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Camera Functions (Complaint Form)
+// ════════════════════════════════════════════════════════════
+var _cameraStreamComplaint = null;
+
+function toggleCameraComplaint() {
+  var container = document.getElementById('camera-container-complaint');
+  var btn = document.getElementById('btn-camera-complaint');
+  if (!container || !btn) return;
+
+  if (_cameraStreamComplaint) {
+    stopCameraComplaint();
+    return;
+  }
+
+  container.style.display = 'block';
+  btn.innerHTML = '&#x23F3; Memuat kamera...';
+  btn.disabled = true;
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(function(stream) {
+        _cameraStreamComplaint = stream;
+        var video = document.getElementById('camera-preview-complaint');
+        if (video) {
+          video.srcObject = stream;
+          video.play();
+        }
+        btn.innerHTML = '&#x25B6; Kamera Nyala';
+        btn.style.background = 'rgba(16,185,129,0.2)';
+        btn.style.color = '#6ee7b7';
+        btn.style.borderColor = 'rgba(16,185,129,0.4)';
+        btn.disabled = false;
+      })
+      .catch(function(err) {
+        container.style.display = 'none';
+        btn.innerHTML = '&#x1F4F7; Buka Kamera';
+        btn.style.background = 'rgba(99,102,241,0.15)';
+        btn.style.color = '#a5b4fc';
+        btn.style.borderColor = 'rgba(99,102,241,0.3)';
+        btn.disabled = false;
+        showToast('Kamera tidak tersedia: ' + err.message, 'error');
+      });
+  } else {
+    container.style.display = 'none';
+    btn.innerHTML = '&#x1F4F7; Buka Kamera';
+    btn.style.background = 'rgba(99,102,241,0.15)';
+    btn.style.color = '#a5b4fc';
+    btn.disabled = false;
+    showToast('Browser tidak mendukung akses kamera', 'error');
+  }
+}
+
+function capturePhotoComplaint() {
+  var video = document.getElementById('camera-preview-complaint');
+  var canvas = document.getElementById('canvas-complaint');
+  if (!video || !canvas) return;
+
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+  var fotoInput = document.getElementById('cf-foto');
+  if (fotoInput) {
+    fotoInput.value = dataUrl;
+  }
+
+  var previewContainer = document.getElementById('foto-preview-complaint');
+  var previewImg = document.getElementById('foto-img-preview-complaint');
+  if (previewContainer && previewImg) {
+    previewImg.src = dataUrl;
+    previewContainer.style.display = 'block';
+  }
+
+  stopCameraComplaint();
+  showToast('Foto berhasil diambil!', 'success');
+}
+
+function stopCameraComplaint() {
+  var container = document.getElementById('camera-container-complaint');
+  var btn = document.getElementById('btn-camera-complaint');
+
+  if (_cameraStreamComplaint) {
+    _cameraStreamComplaint.getTracks().forEach(function(track) { track.stop(); });
+    _cameraStreamComplaint = null;
+  }
+
+  var video = document.getElementById('camera-preview-complaint');
+  if (video) {
+    video.srcObject = null;
+  }
+
+  if (container) container.style.display = 'none';
+  if (btn) {
+    btn.innerHTML = '&#x1F4F7; Buka Kamera';
+    btn.style.background = 'rgba(99,102,241,0.15)';
+    btn.style.color = '#a5b4fc';
+    btn.style.borderColor = 'rgba(99,102,241,0.3)';
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Delete Ticket
+// ════════════════════════════════════════════════════════════
+function showDeleteTicketConfirm(tiketId) {
+  var overlay = document.getElementById('modal-delete-ticket-overlay');
+  if (!overlay) return;
+  document.getElementById('dt-tiket-id').value = tiketId;
+  document.getElementById('dt-tiket-label').textContent = 'Yakin ingin menghapus tiket ' + tiketId + '?';
+  document.getElementById('delete-ticket-error').style.display = 'none';
+  overlay.classList.add('show');
+}
+
+async function confirmDeleteTicket() {
+  var tiketId = document.getElementById('dt-tiket-id').value;
+  var btn = document.getElementById('btn-confirm-delete-ticket');
+  var errorEl = document.getElementById('delete-ticket-error');
+  if (!tiketId) return;
+
+  btn.disabled = true;
+  btn.textContent = '\u23F3 Menghapus...';
+
+  try {
+    var res = await supabase.from('main_data').delete().eq('tiket_id', tiketId);
+    if (res.error) throw res.error;
+
+    showToast('Tiket ' + tiketId + ' berhasil dihapus!', 'success');
+    document.getElementById('modal-delete-ticket-overlay').classList.remove('show');
+    if (APP.currentPage === 'maintenance') {
+      var content = document.getElementById('main-content');
+      if (content) renderMaintenance(content);
+    }
+  } catch(e) {
+    errorEl.textContent = 'Gagal menghapus: ' + e.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '\u2705 Ya, Hapus';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Send WhatsApp Notification
+// ════════════════════════════════════════════════════════════
+async function sendTicketWA(tiketId) {
+  var overlay = document.getElementById('modal-wa-ticket-overlay');
+  if (!overlay) return;
+
+  try {
+    // Fetch ticket data
+    var res = await supabase.from('main_data').select('*').eq('tiket_id', tiketId).single();
+    if (res.error) throw res.error;
+    var t = res.data;
+    if (!t) { showToast('Tiket tidak ditemukan', 'error'); return; }
+    if (!t.no_wa) { showToast('Nomor WA tidak tersedia', 'error'); return; }
+
+    document.getElementById('wa-tiket-id').value = tiketId;
+    document.getElementById('wa-tiket-info').textContent = tiketId + ' — ' + (t.nama_customer || '-') + ' | ' + (t.status || '-');
+    document.getElementById('wa-tiket-number').value = t.no_wa;
+    document.getElementById('wa-message').value = generateWAMessage(t);
+    document.getElementById('wa-error').style.display = 'none';
+    overlay.classList.add('show');
+  } catch(e) {
+    showToast('Gagal memuat data: ' + e.message, 'error');
+  }
+}
+
+function generateWAMessage(t) {
+  var msg = 'Halo *' + (t.nama_customer || 'Customer') + '*,\n\n';
+  msg += 'Kami informasikan status tiket komplain Anda sebagai berikut:\n\n';
+  msg += '📋 *ID Tiket:* ' + t.tiket_id + '\n';
+  msg += '📌 *Status:* ' + (t.status || '-') + '\n';
+  msg += '🔧 *Kategori:* ' + (t.kategori || '-') + '\n';
+  msg += '📍 *Lokasi:* ' + (t.lokasi || '-') + '\n';
+  if (t.teknisi) msg += '👨‍🔧 *Teknisi:* ' + t.teknisi + '\n';
+  if (t.catatan) msg += '📝 *Catatan:* ' + t.catatan + '\n';
+  msg += '\nTerima kasih atas perhatiannya.\n';
+  msg += '— *GA Operations Team*';
+  return msg;
+}
+
+async function doSendWA() {
+  var tiketId = document.getElementById('wa-tiket-id').value;
+  var number = document.getElementById('wa-tiket-number').value.trim();
+  var message = document.getElementById('wa-message').value.trim();
+  var btn = document.getElementById('btn-send-wa');
+  var errorEl = document.getElementById('wa-error');
+
+  if (!number || !message) {
+    errorEl.textContent = 'Nomor WA dan pesan wajib diisi.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  // Clean number: remove +, spaces, etc.
+  number = number.replace(/[^0-9]/g, '');
+  if (!number.startsWith('62')) {
+    if (number.startsWith('0')) number = '62' + number.slice(1);
+    else number = '62' + number;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '\u23F3 Mengirim...';
+
+  try {
+    var funcUrl = localStorage.getItem('ga_function_url') || 'https://ytoopikqfmiomgfzhoem.supabase.co/functions/v1/wa-notifications';
+    var url = funcUrl.replace(/\/$/, '') + '/send';
+
+    var response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: number, message: message })
+    });
+
+    var result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal mengirim WA');
+
+    showToast('Notifikasi WA berhasil dikirim ke ' + number, 'success');
+    document.getElementById('modal-wa-ticket-overlay').classList.remove('show');
+  } catch(e) {
+    // Fallback: open WhatsApp web directly
+    var waUrl = 'https://wa.me/' + number + '?text=' + encodeURIComponent(message);
+    window.open(waUrl, '_blank');
+    showToast('WA Web dibuka. Silakan kirim manual.', 'warning');
+    document.getElementById('modal-wa-ticket-overlay').classList.remove('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '\uD83D\uDCE8 Kirim WA';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Export CSV
+// ════════════════════════════════════════════════════════════
+function exportTicketsCSV() {
+  if (!_mntData || _mntData.length === 0) {
+    showToast('Tidak ada data tiket untuk di-export', 'warning');
+    return;
+  }
+
+  // Define headers
+  var headers = ['Tiket ID', 'Customer', 'No. WA', 'Lokasi', 'Kategori', 'Sub Kategori', 'Urgensi', 'Status', 'Teknisi', 'Deskripsi', 'Tanggal', 'Selesai', 'Rating'];
+
+  // Build CSV rows
+  var rows = _mntData.map(function(t) {
+    return [
+      t.tiket_id,
+      t.nama_customer,
+      t.no_wa,
+      t.lokasi,
+      t.kategori,
+      t.sub_kategori,
+      t.urgensi,
+      t.status,
+      t.teknisi || '',
+      (t.deskripsi || '').replace(/"/g, '""'),
+      t.timestamp ? new Date(t.timestamp).toLocaleDateString('id-ID') : '',
+      t.tanggal_selesai ? new Date(t.tanggal_selesai).toLocaleDateString('id-ID') : '',
+      t.rating_survei || ''
+    ];
+  });
+
+  // Build CSV string
+  var csv = '\uFEFF'; // BOM for Excel UTF-8 support
+  csv += headers.map(function(h) { return '"' + h + '"'; }).join(',') + '\n';
+  rows.forEach(function(row) {
+    csv += row.map(function(cell) {
+      var val = String(cell || '');
+      if (val.indexOf(',') > -1 || val.indexOf('"') > -1 || val.indexOf('\n') > -1) {
+        val = '"' + val.replace(/"/g, '""') + '"';
+      }
+      return val;
+    }).join(',') + '\n';
+  });
+
+  // Download
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'tiket_maintenance_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+
+  showToast('Berhasil mengexport ' + _mntData.length + ' tiket!', 'success');
+}
+
+// ════════════════════════════════════════════════════════════
+// TIKET KOMPLAIN — Load Open Ticket Badge
+// ════════════════════════════════════════════════════════════
+async function loadOpenTicketBadge() {
+  try {
+    var res = await supabase.from('main_data').select('*', { count: 'exact', head: true }).eq('status', 'Open');
+    var badge = document.getElementById('badge-open');
+    if (!badge) return;
+    var count = res.count || 0;
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(e) {
+    // Silently fail - badge is optional
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PAGE: PATROL — Log Patroli
 // ════════════════════════════════════════════════════════════
 var _patrolLogData = [];
 var _patrolCPData = [];
@@ -3797,11 +4254,11 @@ async function loadSurveyConfigData() {
 // ════════════════════════════════════════════════════════════
 </body>
 <!-- COMPLAINT FORM MODAL -->
-<div class="modal-overlay" id="modal-complaint-overlay" onclick="if(event.target===this){document.getElementById('modal-complaint-overlay').classList.remove('show')}">
+<div class="modal-overlay" id="modal-complaint-overlay" onclick="if(event.target===this){stopCameraComplaint();document.getElementById('modal-complaint-overlay').classList.remove('show')}">
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title" id="complaint-form-title">+ Tiket Komplain Baru</div>
-      <button class="modal-close" onclick="document.getElementById('modal-complaint-overlay').classList.remove('show')">&times;</button>
+      <button class="modal-close" onclick="stopCameraComplaint();document.getElementById('modal-complaint-overlay').classList.remove('show')">&times;</button>
     </div>
     <form id="complaint-form" onsubmit="event.preventDefault(); saveComplaintForm()">
       <input type="hidden" id="cf-tiket-id">
@@ -3850,12 +4307,30 @@ async function loadSurveyConfigData() {
         <textarea class="login-input" id="cf-deskripsi" rows="3" placeholder="Jelaskan detail kerusakan..." style="resize:vertical;font-family:var(--font)"></textarea>
       </div>
       <div class="login-form-group">
-        <label class="login-label">Foto Kerusakan (URL)</label>
-        <input type="text" class="login-input" id="cf-foto" placeholder="Link Google Drive atau URL foto">
+        <label class="login-label">&#x1F4F7; Foto Kerusakan</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" class="login-input" id="cf-foto" placeholder="URL foto atau hasil camera" style="flex:1;min-width:150px" readonly>
+          <button type="button" id="btn-camera-complaint" onclick="toggleCameraComplaint()" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap">&#x1F4F7; Buka Kamera</button>
+          <button type="button" onclick="document.getElementById('cf-foto').value='';document.getElementById('foto-preview-complaint').style.display='none'" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:none;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:0.78rem" title="Hapus foto">&#x1F5D1;</button>
+        </div>
+        <div id="camera-container-complaint" style="display:none;margin-top:10px">
+          <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;max-width:320px">
+            <video id="camera-preview-complaint" autoplay playsinline style="width:100%;display:block"></video>
+            <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px">
+              <button type="button" id="btn-capture-complaint" onclick="capturePhotoComplaint()" style="background:rgba(255,255,255,0.9);color:#1e293b;border:none;width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:1.2rem;box-shadow:0 2px 10px rgba(0,0,0,0.3)">&#x1F4F7;</button>
+              <button type="button" onclick="stopCameraComplaint()" style="background:rgba(239,68,68,0.9);color:white;border:none;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:0.72rem;font-weight:600">&#x274C; Tutup</button>
+            </div>
+          </div>
+        </div>
+        <canvas id="canvas-complaint" style="display:none"></canvas>
+        <div id="foto-preview-complaint" style="display:none;margin-top:8px">
+          <img id="foto-img-preview-complaint" style="max-width:160px;max-height:120px;border-radius:8px;border:1px solid rgba(255,255,255,0.1)">
+          <div style="color:#34d399;font-size:0.7rem;margin-top:4px">&#x2705; Foto siap</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button type="submit" class="login-btn login-btn-primary" id="btn-save-complaint" style="flex:1">&#x1F4BE; Simpan</button>
-        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-complaint-overlay').classList.remove('show')">Batal</button>
+        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="stopCameraComplaint();document.getElementById('modal-complaint-overlay').classList.remove('show')">Batal</button>
       </div>
     </form>
   </div>
@@ -3866,7 +4341,7 @@ async function loadSurveyConfigData() {
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title" id="status-form-title">Update Status</div>
-      <button class="modal-close" onclick="document.getElementById('modal-status-overlay').classList.remove('show')">&times;</button>
+      <button class="modal-close" onclick="stopCameraStatus();document.getElementById('modal-status-overlay').classList.remove('show')">&times;</button>
     </div>
     <form id="status-form" onsubmit="event.preventDefault(); doUpdateStatus()">
       <input type="hidden" id="sf-tiket-id">
@@ -3887,12 +4362,30 @@ async function loadSurveyConfigData() {
         <textarea class="login-input" id="sf-catatan" rows="3" placeholder="Catatan perbaikan..." style="resize:vertical;font-family:var(--font)"></textarea>
       </div>
       <div class="login-form-group">
-        <label class="login-label">Foto Perbaikan (URL)</label>
-        <input type="text" class="login-input" id="sf-foto" placeholder="Link Google Drive atau URL foto">
+        <label class="login-label">&#x1F4F7; Foto Perbaikan</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" class="login-input" id="sf-foto" placeholder="URL foto atau hasil camera" style="flex:1;min-width:150px" readonly>
+          <button type="button" id="btn-camera-status" onclick="toggleCameraStatus()" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap">&#x1F4F7; Buka Kamera</button>
+          <button type="button" onclick="document.getElementById('sf-foto').value='';document.getElementById('foto-preview-status').style.display='none'" style="background:rgba(239,68,68,0.12);color:#fca5a5;border:none;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:0.78rem" title="Hapus foto">&#x1F5D1;</button>
+        </div>
+        <div id="camera-container-status" style="display:none;margin-top:10px">
+          <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;max-width:320px">
+            <video id="camera-preview-status" autoplay playsinline style="width:100%;display:block"></video>
+            <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px">
+              <button type="button" id="btn-capture-status" onclick="capturePhotoStatus()" style="background:rgba(255,255,255,0.9);color:#1e293b;border:none;width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:1.2rem;box-shadow:0 2px 10px rgba(0,0,0,0.3)">&#x1F4F7;</button>
+              <button type="button" onclick="stopCameraStatus()" style="background:rgba(239,68,68,0.9);color:white;border:none;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:0.72rem;font-weight:600">&#x274C; Tutup</button>
+            </div>
+          </div>
+        </div>
+        <canvas id="canvas-status" style="display:none"></canvas>
+        <div id="foto-preview-status" style="display:none;margin-top:8px">
+          <img id="foto-img-preview-status" style="max-width:160px;max-height:120px;border-radius:8px;border:1px solid rgba(255,255,255,0.1)">
+          <div style="color:#34d399;font-size:0.7rem;margin-top:4px">&#x2705; Foto siap</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button type="submit" class="login-btn login-btn-primary" id="btn-update-status" style="flex:1">&#x1F4BE; Update</button>
-        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-status-overlay').classList.remove('show')">Batal</button>
+        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="stopCameraStatus();document.getElementById('modal-status-overlay').classList.remove('show')">Batal</button>
       </div>
     </form>
   </div>
@@ -3935,6 +4428,59 @@ async function loadSurveyConfigData() {
     </form>
   </div>
 </div>
+
+<!-- DELETE TICKET CONFIRMATION MODAL -->
+<div class="modal-overlay" id="modal-delete-ticket-overlay" onclick="if(event.target===this){this.classList.remove('show')}">
+  <div class="modal-box" style="width:400px">
+    <div class="modal-header">
+      <div class="modal-title">&#x26A0;&#xFE0F; Hapus Tiket</div>
+      <button class="modal-close" onclick="document.getElementById('modal-delete-ticket-overlay').classList.remove('show')">&times;</button>
+    </div>
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:2.5rem;margin-bottom:12px">&#x1F5D1;</div>
+      <div id="dt-tiket-label" style="color:#e0e7ff;font-size:0.95rem;font-weight:600;margin-bottom:6px">Yakin ingin menghapus tiket ini?</div>
+      <div style="color:#64748b;font-size:0.78rem">Tiket yang dihapus tidak dapat dikembalikan.</div>
+      <input type="hidden" id="dt-tiket-id">
+      <div id="delete-ticket-error" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:0.82rem;margin-top:12px;display:none"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-delete-ticket-overlay').classList.remove('show')">Batal</button>
+      <button class="login-btn" id="btn-confirm-delete-ticket" style="flex:1;background:linear-gradient(135deg,#ef4444,#f87171);color:white" onclick="confirmDeleteTicket()">&#x2705; Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEND WA NOTIFICATION MODAL -->
+<div class="modal-overlay" id="modal-wa-ticket-overlay" onclick="if(event.target===this){document.getElementById('modal-wa-ticket-overlay').classList.remove('show')}">
+  <div class="modal-box" style="width:520px">
+    <div class="modal-header">
+      <div class="modal-title">&#x1F4E8; Kirim Notifikasi WA</div>
+      <button class="modal-close" onclick="document.getElementById('modal-wa-ticket-overlay').classList.remove('show')">&times;</button>
+    </div>
+    <form id="wa-ticket-form" onsubmit="event.preventDefault(); doSendWA()">
+      <input type="hidden" id="wa-tiket-id">
+      <div id="wa-error" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:0.82rem;margin-bottom:16px;display:none"></div>
+      <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px 16px;margin-bottom:16px">
+        <div style="color:#a5b4fc;font-size:0.78rem;font-weight:600;margin-bottom:4px">&#x1F4CB; Informasi Tiket</div>
+        <div id="wa-tiket-info" style="color:#e0e7ff;font-size:0.85rem">Memuat...</div>
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Nomor WhatsApp *</label>
+        <input type="text" class="login-input" id="wa-tiket-number" placeholder="6281234567890" required>
+        <div style="color:#475569;font-size:0.7rem;margin-top:4px">Format: 628xxx (tanpa + atau spasi)</div>
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Pesan *</label>
+        <textarea class="login-input" id="wa-message" rows="6" style="resize:vertical;font-family:var(--font);font-size:0.82rem"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button type="submit" class="login-btn login-btn-primary" id="btn-send-wa" style="flex:1">&#x1F4E8; Kirim WA</button>
+        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-wa-ticket-overlay').classList.remove('show')">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <div id="bottom-nav">
   <button class="bnav-item active" onclick="navigateToPage('dashboard')" data-page="dashboard">
