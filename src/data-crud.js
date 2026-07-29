@@ -106,6 +106,22 @@ async function saveAssetForm() {
   }
 }
 
+async function editAssetItem(id) {
+  if (!id) return;
+  var item = _assetListData.find(function(a) { return a.id === id; });
+  if (!item) { showToast('Data aset tidak ditemukan', 'error'); return; }
+
+  var overlay = document.getElementById('modal-asset-overlay');
+  if (!overlay) return;
+
+  document.getElementById('f-asset-kat').value = item.kategori || '';
+  document.getElementById('f-asset-nama').value = item.nama_aset || '';
+  document.getElementById('f-asset-detail').value = item.detail_kapasitas || '';
+  document.getElementById('f-asset-status').value = item.status_operasional || 'Tersedia';
+  document.getElementById('asset-error').style.display = 'none';
+  overlay.classList.add('show');
+}
+
 async function delAssetItem(id) {
   if (!id) return;
   if (!confirm('Yakin ingin menghapus aset ini? Data akan dihapus permanen.')) return;
