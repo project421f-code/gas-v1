@@ -83,7 +83,7 @@ async function renderUsers(content) {
 }
 
 function showUserForm(idx) {
-  var overlay = document.getElementById('modal-form-overlay');
+  var overlay = document.getElementById('modal-user-overlay');
   var form = document.getElementById('user-form');
   if (!overlay || !form) return;
 
@@ -120,7 +120,7 @@ function showUserForm(idx) {
 
 async function saveUserForm() {
   var form = document.getElementById('user-form');
-  var overlay = document.getElementById('modal-form-overlay');
+  var overlay = document.getElementById('modal-user-overlay');
   var btn = form.querySelector('button[type="submit"]');
 
   var user_id = document.getElementById('user-form-id').value;

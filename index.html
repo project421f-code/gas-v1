@@ -732,12 +732,23 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- GENERIC FORM MODAL (for showFormModal) -->
+<div class="modal-overlay" id="modal-form-overlay" onclick="if(event.target===this)hideFormModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-form-title">Form</div>
+      <button class="modal-close" onclick="hideFormModal()">&times;</button>
+    </div>
+    <div id="modal-form-body"></div>
+  </div>
+</div>
+
 <!-- USER FORM MODAL -->
-<div class="modal-overlay" id="modal-form-overlay" onclick="if(event.target===this){document.getElementById('modal-form-overlay').classList.remove('show')}">
+<div class="modal-overlay" id="modal-user-overlay" onclick="if(event.target===this){document.getElementById('modal-user-overlay').classList.remove('show')}">
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title" id="user-form-title">Tambah User</div>
-      <button class="modal-close" onclick="document.getElementById('modal-form-overlay').classList.remove('show')">&times;</button>
+      <button class="modal-close" onclick="document.getElementById('modal-user-overlay').classList.remove('show')">&times;</button>
     </div>
     <form id="user-form" onsubmit="event.preventDefault(); saveUserForm()">
       <input type="hidden" id="user-form-id">
@@ -779,7 +790,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button type="submit" class="login-btn login-btn-primary" style="flex:1">Simpan</button>
-        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-form-overlay').classList.remove('show')">Batal</button>
+        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-user-overlay').classList.remove('show')">Batal</button>
       </div>
     </form>
   </div>
