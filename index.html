@@ -2322,6 +2322,53 @@ async function doUpdateStatus() {
 // ════════════════════════════════════════════════════════════
 var _cameraStreamStatus = null;
 
+// ════════════════════════════════════════════════════════════
+// SHARED — Base64 to Blob & Upload to Supabase Storage
+// ════════════════════════════════════════════════════════════
+var STORAGE_BUCKET = 'foto-tiket';
+
+function base64ToBlob(dataUrl) {
+  var arr = dataUrl.split(',');
+  var mime = arr[0].match(/:(.*?);/)[1];
+  var bstr = atob(arr[1]);
+  var n = bstr.length;
+  var u8arr = new Uint8Array(n);
+  while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+  return new Blob([u8arr], { type: mime });
+}
+
+async function uploadPhotoToSupabase(dataUrl, folder) {
+  try {
+    var blob = base64ToBlob(dataUrl);
+    var fileName = Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+    var filePath = folder + '/' + fileName;
+
+    var uploadRes = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, blob, {
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+
+    if (uploadRes.error) {
+      console.warn('Upload to Supabase Storage failed:', uploadRes.error.message);
+      if (uploadRes.error.message && uploadRes.error.message.includes('bucket')) {
+        showToast('Bucket \'' + STORAGE_BUCKET + '\' belum dibuat. Buat di Supabase Dashboard > Storage, lalu set Public.', 'warning');
+      }
+      return null;
+    }
+
+    var publicUrlRes = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return publicUrlRes.data.publicUrl;
+  } catch(e) {
+    console.warn('Upload failed:', e.message);
+    return null;
+  }
+}
+
 function toggleCameraStatus() {
   var container = document.getElementById('camera-container-status');
   var btn = document.getElementById('btn-camera-status');
@@ -2372,7 +2419,7 @@ function toggleCameraStatus() {
   }
 }
 
-function capturePhotoStatus() {
+async function capturePhotoStatus() {
   var video = document.getElementById('camera-preview-status');
   var canvas = document.getElementById('canvas-status');
   if (!video || !canvas) return;
@@ -2385,18 +2432,26 @@ function capturePhotoStatus() {
   // Convert to base64 data URL (JPEG, quality 0.7)
   var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
-  // Set the foto input value
+  // Upload to Supabase Storage
   var fotoInput = document.getElementById('sf-foto');
-  if (fotoInput) {
-    fotoInput.value = dataUrl;
-  }
-
-  // Show preview
   var previewContainer = document.getElementById('foto-preview-status');
   var previewImg = document.getElementById('foto-img-preview-status');
+
+  // Show preview immediately (from base64)
   if (previewContainer && previewImg) {
     previewImg.src = dataUrl;
     previewContainer.style.display = 'block';
+  }
+
+  // Upload to Storage (async)
+  var publicUrl = await uploadPhotoToSupabase(dataUrl, 'status');
+  if (publicUrl && fotoInput) {
+    fotoInput.value = publicUrl;
+    console.log('Foto uploaded:', publicUrl);
+  } else if (fotoInput) {
+    // Fallback: store base64 directly
+    fotoInput.value = dataUrl;
+    showToast('Foto disimpan lokal (gagal upload ke Storage)', 'warning');
   }
 
   // Stop camera after capture
@@ -2482,7 +2537,7 @@ function toggleCameraComplaint() {
   }
 }
 
-function capturePhotoComplaint() {
+async function capturePhotoComplaint() {
   var video = document.getElementById('camera-preview-complaint');
   var canvas = document.getElementById('canvas-complaint');
   if (!video || !canvas) return;
@@ -2495,15 +2550,24 @@ function capturePhotoComplaint() {
   var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
   var fotoInput = document.getElementById('cf-foto');
-  if (fotoInput) {
-    fotoInput.value = dataUrl;
-  }
-
   var previewContainer = document.getElementById('foto-preview-complaint');
   var previewImg = document.getElementById('foto-img-preview-complaint');
+
+  // Show preview immediately
   if (previewContainer && previewImg) {
     previewImg.src = dataUrl;
     previewContainer.style.display = 'block';
+  }
+
+  // Upload to Supabase Storage
+  var publicUrl = await uploadPhotoToSupabase(dataUrl, 'complaint');
+  if (publicUrl && fotoInput) {
+    fotoInput.value = publicUrl;
+    console.log('Foto uploaded:', publicUrl);
+  } else if (fotoInput) {
+    // Fallback: store base64 directly
+    fotoInput.value = dataUrl;
+    showToast('Foto disimpan lokal (gagal upload ke Storage)', 'warning');
   }
 
   stopCameraComplaint();
