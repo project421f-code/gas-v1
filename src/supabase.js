@@ -2,7 +2,7 @@
 // SUPABASE CLIENT — Direct REST API via fetch() (no CDN needed)
 // ════════════════════════════════════════════════════════════
 var SUPABASE_URL = 'https://ytoopikqfmiomgfzhoem.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0b29waWtxZm1pb21nZnpob2VtIiwicm9sZSEiOiJhbm9uIiwiaWF0IjoxNzg0NjQ3ODM4LCJleHAiOjIxMDAyMjM4Mzh9.64f5RJm2eVGmYd2PlIM125brirxNP0eG-YfX8NT-pls';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0b29waWtxZm1pb21nZnpob2VtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDc4MzgsImV4cCI6MjEwMDIyMzgzOH0.64f5RJm2eVGmYd2PlIM125brirxNP0eG-YfX8NT-pls';
 
 var supabaseReady = true;
 var _supabaseAccessToken = null;
@@ -111,8 +111,12 @@ function _createQuery(tableName) {
 
   var q = {
     // SELECT
-    select: function(cols) {
+    select: function(cols, opts) {
       selectStr = cols || '*';
+      if (opts) {
+        if (opts.count) countMode = opts.count;
+        if (opts.head) { /* head=true handled in _executeQuery via HEAD method */ }
+      }
       return q;
     },
     // FILTERS
@@ -193,7 +197,7 @@ function _createQuery(tableName) {
     },
     // EXECUTE SELECT
     then: function(resolve, reject) {
-      return _executeQuery('GET').then(resolve).catch(reject);
+      return _executeQuery(countMode ? 'HEAD' : 'GET').then(resolve).catch(reject);
     },
     // INSERT
     insert: async function(data) {
@@ -259,10 +263,10 @@ function _createQuery(tableName) {
     }
   };
 
-  // Internal: execute GET query
+  // Internal: execute GET/HEAD query
   async function _executeQuery(method) {
     var params = [];
-    params.push('select=' + encodeURIComponent(selectStr));
+    if (method !== 'HEAD') params.push('select=' + encodeURIComponent(selectStr));
     filters.forEach(function(f) { params.push(f); });
     if (orderBy) params.push('order=' + encodeURIComponent(orderBy) + (orderAsc ? '.asc' : '.desc'));
     if (limitVal) params.push('limit=' + limitVal);
