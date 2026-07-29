@@ -720,15 +720,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div class="login-title">GA Operations</div>
     <div class="login-subtitle">Sistem Manajemen Operasional General Affair</div>
     <div class="login-error" id="login-error"></div>
+    <form onsubmit="event.preventDefault(); doLogin()">
     <div class="login-form-group">
       <label class="login-label">Email</label>
       <input type="email" class="login-input" id="login-email" placeholder="email@ga.com" autocomplete="email">
     </div>
     <div class="login-form-group">
       <label class="login-label">Password</label>
-      <input type="password" class="login-input" id="login-password" placeholder="Masukkan password" autocomplete="current-password" onkeyup="if(event.key==='Enter')doLogin()">
+      <input type="password" class="login-input" id="login-password" placeholder="Masukkan password" autocomplete="current-password">
     </div>
-    <button class="login-btn login-btn-primary" id="btn-login" onclick="doLogin()">Login</button>
+    <button type="submit" class="login-btn login-btn-primary" id="btn-login">Login</button>
+    </form>
   </div>
 </div>
 
@@ -1014,9 +1016,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     }
     return;
   }
+  if (!supabaseReady || !supabase) {
+    hideLoading();
+    showLoginScreen();
+    return;
+  }
   supabase.auth.getSession().then(function(sessionRes) {
     if (sessionRes.data.session) {
-      // Session exists, fetch user profile from user_list
       var email = sessionRes.data.session.user.email;
       supabase.from('user_list').select('*').eq('email', email).single().then(function(res) {
         if (res.data && res.data.status === 'Aktif') {
@@ -1028,12 +1034,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           setTimeout(function() { hideLoading(); showLoginScreen(); }, 1000);
         }
       }).catch(function() {
-        // Supabase unreachable, try to use cached user
         hideLoading();
         showLoginScreen();
       });
     } else {
-      // No session
       setTimeout(function() { hideLoading(); showLoginScreen(); }, 1200);
     }
   }).catch(function() {
