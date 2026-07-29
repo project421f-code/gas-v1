@@ -732,9 +732,16 @@ var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var APP = { user: null, currentPage: 'dashboard', charts: {}, surveyTab: 'garating' };
 
 // ════════════════════════════════════════════════════════════
-// BOOT — Check Supabase Auth session
+// BOOT — Check Supabase Auth session OR public page
 // ════════════════════════════════════════════════════════════
 (function() {
+  // Check if public booking page is requested
+  var params = getUrlParams();
+  if (params.page === 'public') {
+    hideLoading();
+    initPublicPage();
+    return;
+  }
   supabase.auth.getSession().then(function(sessionRes) {
     if (sessionRes.data.session) {
       // Session exists, fetch user profile from user_list
@@ -4088,11 +4095,15 @@ async function renderBooking(content) {
   loadBookingData();
 }
 
+var _assetListData = [];
+
 async function renderAssetList(content) {
   content.innerHTML = '<div class="page-header"><div class="page-title">Master Aset</div><div class="page-desc">Daftar aset kantor</div></div>' +
-    '<div class="card"><div class="card-header"><div class="card-title">&#x1F4E6; Daftar Aset</div><div class="card-actions"><button class="btn btn-outline btn-sm" onclick="renderAssetList(document.getElementById(\'main-content\'))">&#x1F504; Refresh</button></div></div>' +
-    '<div class="card-body no-pad"><div class="table-wrap"><table><thead><tr><th>Kategori</th><th>Nama Aset</th><th>Detail</th><th>Status</th></tr></thead>' +
-    '<tbody id="tbody-assetlist"><tr><td colspan="4" class="table-empty">Memuat...</td></tr></tbody></table></div></div></div>';
+    '<div class="card"><div class="card-header"><div class="card-title">&#x1F4E6; Daftar Aset</div><div class="card-actions">' +
+    '<button class="btn btn-primary btn-sm" onclick="showAssetForm()">&#x2795; Tambah Aset</button>' +
+    '<button class="btn btn-outline btn-sm" onclick="renderAssetList(document.getElementById(\'main-content\'))">&#x1F504; Refresh</button></div></div>' +
+    '<div class="card-body no-pad"><div class="table-wrap"><table><thead><tr><th>Kategori</th><th>Nama Aset</th><th>Detail</th><th>Status</th><th>Aksi</th></tr></thead>' +
+    '<tbody id="tbody-assetlist"><tr><td colspan="5" class="table-empty">Memuat...</td></tr></tbody></table></div></div></div>';
   loadAssetListData();
 }
 
@@ -4200,16 +4211,91 @@ async function loadAssetListData() {
     var res = await supabase.from('asset_list').select('*').order('id');
     if (res.error) throw res.error;
     var data = res.data || [];
+    _assetListData = data;
     var tbody = document.getElementById('tbody-assetlist');
     if (!tbody) return;
-    if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada data</td></tr>'; return; }
+    if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada data. Klik "+ Tambah Aset" untuk menambah.</td></tr>'; return; }
     tbody.innerHTML = data.map(function(d) {
-      var statusCls = d.status_operasional === 'Tersedia' ? 'badge-green' : 'badge-red';
+      var statusCls = d.status_operasional === 'Tersedia' ? 'badge-green' : (d.status_operasional === 'Maintenance' ? 'badge-amber' : 'badge-red');
       return '<tr><td>' + escapeHtml(d.kategori || '-') + '</td><td>' + escapeHtml(d.nama_aset || '-') + '</td>' +
         '<td>' + escapeHtml(d.detail_kapasitas || '-') + '</td>' +
-        '<td><span class="badge ' + statusCls + '">' + escapeHtml(d.status_operasional) + '</span></td></tr>';
+        '<td><span class="badge ' + statusCls + '">' + escapeHtml(d.status_operasional) + '</span></td>' +
+        '<td class="actions">' +
+        '<button class="btn btn-danger btn-xs" onclick="delAssetItem(' + d.id + ')" title="Hapus">&#x1F5D1;</button>' +
+        '</td></tr>';
     }).join('');
+    injectMobileTableLabels();
   } catch(e) { console.error(e); }
+}
+
+// ════════════════════════════════════════════════════════════
+// CRUD ASET — Form Tambah / Edit
+// ════════════════════════════════════════════════════════════
+function showAssetForm() {
+  var overlay = document.getElementById('modal-asset-overlay');
+  if (!overlay) return;
+  document.getElementById('asset-form').reset();
+  document.getElementById('asset-error').style.display = 'none';
+  overlay.classList.add('show');
+}
+
+async function saveAssetForm() {
+  var overlay = document.getElementById('modal-asset-overlay');
+  var btn = document.getElementById('btn-save-asset');
+  var errorEl = document.getElementById('asset-error');
+
+  var kategori = document.getElementById('f-asset-kat').value;
+  var nama = document.getElementById('f-asset-nama').value.trim();
+  var detail = document.getElementById('f-asset-detail').value.trim();
+  var status = document.getElementById('f-asset-status').value;
+
+  if (!kategori || !nama || !status) {
+    errorEl.textContent = 'Kategori, Nama Aset, dan Status wajib diisi.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  errorEl.style.display = 'none';
+
+  btn.disabled = true;
+  btn.textContent = '\u23F3 Menyimpan...';
+
+  try {
+    var res = await supabase.from('asset_list').insert({
+      kategori: kategori,
+      nama_aset: nama,
+      detail_kapasitas: detail || '-',
+      status_operasional: status
+    });
+    if (res.error) throw res.error;
+
+    showToast('Aset "' + nama + '" berhasil ditambahkan!', 'success');
+    if (overlay) overlay.classList.remove('show');
+    if (APP.currentPage === 'assetlist') {
+      renderAssetList(document.getElementById('main-content'));
+    }
+  } catch(e) {
+    errorEl.textContent = 'Gagal: ' + e.message;
+    errorEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '\uD83D\uDCBE Simpan';
+  }
+}
+
+async function delAssetItem(id) {
+  if (!id) return;
+  if (!confirm('Yakin ingin menghapus aset ini? Data akan dihapus permanen.')) return;
+
+  try {
+    var res = await supabase.from('asset_list').delete().eq('id', id);
+    if (res.error) throw res.error;
+
+    showToast('Aset berhasil dihapus!', 'success');
+    var tbody = document.getElementById('tbody-assetlist');
+    if (tbody) loadAssetListData();
+  } catch(e) {
+    showToast('Gagal menghapus: ' + e.message, 'error');
+  }
 }
 
 async function loadMasterKosData() {
@@ -4658,6 +4744,51 @@ async function loadSurveyConfigData() {
   </div>
 </div>
 
+<!-- ASSET FORM MODAL -->
+<div class="modal-overlay" id="modal-asset-overlay" onclick="if(event.target===this){this.classList.remove('show')}">
+  <div class="modal-box" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">&#x1F4E6; Tambah Aset Baru</div>
+      <button class="modal-close" onclick="document.getElementById('modal-asset-overlay').classList.remove('show')">&times;</button>
+    </div>
+    <form id="asset-form" onsubmit="event.preventDefault(); saveAssetForm()">
+      <div id="asset-error" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 14px;color:#fca5a5;font-size:0.82rem;margin-bottom:16px;display:none"></div>
+      <div class="login-form-group">
+        <label class="login-label">Kategori *</label>
+        <select class="login-input" id="f-asset-kat" required>
+          <option value="">Pilih Kategori</option>
+          <option>Ruangan</option>
+          <option>Kendaraan</option>
+          <option>Peralatan</option>
+          <option>Elektronik</option>
+          <option>Furniture</option>
+          <option>Lainnya</option>
+        </select>
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Nama Aset *</label>
+        <input type="text" class="login-input" id="f-asset-nama" placeholder="Contoh: Toyota Innova B 1234 XYZ" required>
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Detail / Kapasitas</label>
+        <input type="text" class="login-input" id="f-asset-detail" placeholder="Contoh: 7 kursi, AC, audio">
+      </div>
+      <div class="login-form-group">
+        <label class="login-label">Status *</label>
+        <select class="login-input" id="f-asset-status" required>
+          <option value="Tersedia">&#x1F7E2; Tersedia</option>
+          <option value="Tidak Tersedia">&#x1F534; Tidak Tersedia</option>
+          <option value="Maintenance">&#x1F527; Maintenance</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button type="submit" class="login-btn login-btn-primary" id="btn-save-asset" style="flex:1">&#x1F4BE; Simpan</button>
+        <button type="button" class="login-btn" style="flex:1;background:rgba(255,255,255,0.06);color:#94a3b8" onclick="document.getElementById('modal-asset-overlay').classList.remove('show')">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- DELETE TICKET CONFIRMATION MODAL -->
 <div class="modal-overlay" id="modal-delete-ticket-overlay" onclick="if(event.target===this){this.classList.remove('show')}">
   <div class="modal-box" style="width:400px">
@@ -4740,6 +4871,97 @@ async function loadSurveyConfigData() {
   <div class="mobile-sheet-handle"></div>
   <div class="mobile-sheet-title">&#x1F4CC; Main Navigation</div>
   <div class="mobile-sheet-grid" id="mobile-sheet-grid"></div>
+</div>
+
+<!-- PUBLIC BOOKING PAGE (tanpa login) -->
+<div id="public-booking-page" style="display:none">
+  <style>
+    .pub-header { background: linear-gradient(135deg, #0a0f1e, #1a1f3a); padding: 24px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .pub-logo { width: 56px; height: 56px; background: linear-gradient(135deg,var(--primary),var(--primary-light)); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 1.3rem; font-weight: 800; color: white; }
+    .pub-title { font-size: 1.15rem; font-weight: 700; color: #f1f5f9; }
+    .pub-subtitle { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+    .pub-container { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .pub-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .pub-controls label { color: #94a3b8; font-size: 0.82rem; font-weight: 600; }
+    .pub-controls input[type="date"] { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; color: #f1f5f9; font-family: var(--font); font-size: 0.85rem; outline: none; }
+    .pub-controls input[type="date"]:focus { border-color: #6366f1; }
+    .pub-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .pub-stat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; text-align: center; }
+    .pub-stat-value { font-size: 1.5rem; font-weight: 700; }
+    .pub-stat-label { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+    .pub-stat.green .pub-stat-value { color: #34d399; }
+    .pub-stat.blue .pub-stat-value { color: #60a5fa; }
+    .pub-stat.amber .pub-stat-value { color: #fbbf24; }
+    .pub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .pub-asset-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px; transition: all 0.2s ease; }
+    .pub-asset-card:hover { border-color: rgba(99,102,241,0.2); transform: translateY(-2px); }
+    .pub-asset-card.available { border-left: 3px solid #34d399; }
+    .pub-asset-card.booked { border-left: 3px solid #f87171; opacity: 0.7; }
+    .pub-asset-category { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .pub-asset-name { font-size: 0.92rem; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; }
+    .pub-asset-detail { font-size: 0.75rem; color: #64748b; margin-bottom: 10px; }
+    .pub-asset-status { font-size: 0.72rem; font-weight: 600; margin-bottom: 8px; }
+    .pub-asset-status.available { color: #34d399; }
+    .pub-asset-status.booked { color: #f87171; }
+    .pub-asset-slots { margin-top: 8px; }
+    .pub-slot-item { font-size: 0.72rem; color: #94a3b8; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.04); }
+    .pub-loading { text-align: center; padding: 60px 20px; color: #64748b; }
+    .pub-error { text-align: center; padding: 40px 20px; color: #f87171; }
+    .pub-footer { text-align: center; padding: 20px; color: #475569; font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 30px; }
+    .pub-login-link { color: #a5b4fc; text-decoration: none; cursor: pointer; }
+    .pub-login-link:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .pub-stats { grid-template-columns: 1fr 1fr; }
+      .pub-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  <div class="pub-header">
+    <div class="pub-logo">GA</div>
+    <div class="pub-title">Booking Aset GA</div>
+    <div class="pub-subtitle">Cek ketersediaan & booking aset General Affair</div>
+  </div>
+  <div class="pub-container">
+    <div class="pub-controls">
+      <label>&#x1F4C5; Pilih Tanggal</label>
+      <input type="date" id="pub-tanggal" onchange="loadPublicAvailability()">
+      <div style="flex:1"></div>
+      <span style="color:#64748b;font-size:0.78rem" id="pub-total-aset">0</span>
+      <span style="color:#64748b;font-size:0.78rem">aset tersedia</span>
+    </div>
+    <div class="pub-stats">
+      <div class="pub-stat green">
+        <div class="pub-stat-value" id="pub-total-tersedia">0</div>
+        <div class="pub-stat-label">&#x1F7E2; Tersedia</div>
+      </div>
+      <div class="pub-stat blue">
+        <div class="pub-stat-value" id="pub-total-aset-count">0</div>
+        <div class="pub-stat-label">&#x1F4CB; Total Aset</div>
+      </div>
+      <div class="pub-stat amber">
+        <div class="pub-stat-value" id="pub-total-booked">0</div>
+        <div class="pub-stat-label">&#x1F534; Terbooking</div>
+      </div>
+    </div>
+    <div id="pub-content">
+      <div class="pub-loading">&#x1F504; Pilih tanggal untuk melihat ketersediaan aset</div>
+    </div>
+    <div class="pub-footer">
+      &#x1F512; <a class="pub-login-link" onclick="showLoginScreen()">Login</a> untuk akses penuh &nbsp;|&nbsp; GA Operations System
+    </div>
+  </div>
+</div>
+
+<!-- PUBLIC BOOKING MODAL -->
+<div class="modal-overlay" id="modal-pub" onclick="if(event.target===this)closePubModal()">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-pub-title">Booking Aset</div>
+      <button class="modal-close" onclick="closePubModal()">&times;</button>
+    </div>
+    <div id="modal-pub-body" class="card-body"></div>
+    <div id="modal-pub-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:16px 22px;border-top:1px solid rgba(255,255,255,0.06)"></div>
+  </div>
 </div>
 
 </html>
