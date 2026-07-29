@@ -354,4 +354,439 @@ async function renderSurveyConfig(content) {
   loadSurveyConfigData();
 }
 
-// ═══ Data Loading Helpers ═══
+// ════════════════════════════════════════════════════════════
+// DATA LOADING HELPERS — Populate tables from Supabase
+// ════════════════════════════════════════════════════════════
+
+async function loadKPIMntData() {
+  try {
+    var res = await supabase.from('main_data').select('*').order('id', { ascending: false }).limit(100);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    // Group by teknisi
+    var byTeknisi = {};
+    data.forEach(function(t) {
+      var tek = t.nama_teknisi || 'Tidak ditugaskan';
+      if (!byTeknisi[tek]) byTeknisi[tek] = { total: 0, selesai: 0, sla: 0, rating: 0 };
+      byTeknisi[tek].total++;
+      if (t.status === 'Selesai' || t.status === 'Closed') byTeknisi[tek].selesai++;
+      if (t.sla_status === 'Achieved') byTeknisi[tek].sla++;
+    });
+    var tbody = document.getElementById('tbody-kpimnt');
+    if (!tbody) return;
+    var keys = Object.keys(byTeknisi);
+    if (keys.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Belum ada data tiket</td></tr>';
+      return;
+    }
+    tbody.innerHTML = keys.map(function(tek) {
+      var d = byTeknisi[tek];
+      var pctSla = d.total > 0 ? Math.round(d.sla / d.total * 100) : 0;
+      var skor = Math.round((d.selesai / d.total * 0.4 + pctSla / 100 * 0.6) * 100);
+      return '<tr><td data-label="Nama">' + escapeHtml(tek) + '</td><td data-label="Total Tiket">' + d.total + '</td><td data-label="Selesai">' + d.selesai + '</td><td data-label="% SLA">' + pctSla + '%</td><td data-label="Rating">-</td><td data-label="Skor"><strong>' + skor + '</strong></td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-kpimnt');
+    if (el) el.innerHTML = '<tr><td colspan="6" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadKPISecData() {
+  try {
+    var [patrolRes, inspeksiRes] = await Promise.all([
+      supabase.from('patrol_log').select('*').order('id', { ascending: false }).limit(100),
+      supabase.from('asset_inspection').select('*').order('id', { ascending: false }).limit(50)
+    ]);
+    if (patrolRes.error) throw patrolRes.error;
+    var patrolData = patrolRes.data || [];
+    var inspeksiData = (inspeksiRes.error || !inspeksiRes.data) ? [] : inspeksiRes.data;
+
+    var tbody = document.getElementById('tbody-kpisec');
+    if (!tbody) return;
+
+    // Group patrol by petugas
+    var byPetugas = {};
+    patrolData.forEach(function(p) {
+      var name = p.petugas || p.nama_petugas || 'Tidak diketahui';
+      if (!byPetugas[name]) byPetugas[name] = { patroli: 0, inspeksi: 0, insiden: 0 };
+      byPetugas[name].patroli++;
+    });
+    inspeksiData.forEach(function(i) {
+      var name = i.petugas || 'Tidak diketahui';
+      if (!byPetugas[name]) byPetugas[name] = { patroli: 0, inspeksi: 0, insiden: 0 };
+      byPetugas[name].inspeksi++;
+    });
+
+    var keys = Object.keys(byPetugas);
+    if (keys.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Belum ada data patroli</td></tr>';
+      return;
+    }
+    tbody.innerHTML = keys.map(function(name) {
+      var d = byPetugas[name];
+      var skor = Math.min(100, d.patroli * 10 + d.inspeksi * 5);
+      return '<tr><td data-label="Nama">' + escapeHtml(name) + '</td><td data-label="Shift">-</td><td data-label="% Patroli">' + d.patroli + 'x</td><td data-label="Inspeksi">' + d.inspeksi + '</td><td data-label="Insiden">' + d.insiden + '</td><td data-label="Skor"><strong>' + skor + '</strong></td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-kpisec');
+    if (el) el.innerHTML = '<tr><td colspan="6" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadKPIHKData() {
+  try {
+    var [checklistRes, auditRes, gcRes] = await Promise.all([
+      supabase.from('checklist_harian').select('*').order('id', { ascending: false }).limit(100),
+      supabase.from('audit_kebersihan').select('*').order('id', { ascending: false }).limit(50),
+      supabase.from('general_cleaning').select('*').order('id', { ascending: false }).limit(50)
+    ]);
+    if (checklistRes.error) throw checklistRes.error;
+    var clData = checklistRes.data || [];
+    var auditData = (auditRes.error ? [] : auditRes.data) || [];
+    var gcData = (gcRes.error ? [] : gcRes.data) || [];
+
+    var totalChecklist = clData.length;
+    var doneChecklist = clData.filter(function(c) { return c.status === 'Selesai' || c.status === 'Done' || c.status === 'Completed'; }).length;
+    var doneRate = totalChecklist > 0 ? Math.round(doneChecklist / totalChecklist * 100) : 0;
+    var totalGC = gcData.length;
+    var doneGC = gcData.filter(function(g) { return g.status === 'Selesai' || g.status === 'Done'; }).length;
+    var gcRate = totalGC > 0 ? Math.round(doneGC / totalGC * 100) : 0;
+
+    document.getElementById('hk-daily-rate').textContent = doneRate + '%';
+    document.getElementById('hk-gc-rate').textContent = gcRate + '%';
+
+    // Per staff
+    var tbody = document.getElementById('tbody-kpihk');
+    if (!tbody) return;
+    var byStaff = {};
+    clData.forEach(function(c) {
+      var name = c.staf || c.nama_staf || c.petugas || 'Tidak diketahui';
+      if (!byStaff[name]) byStaff[name] = { total: 0, done: 0 };
+      byStaff[name].total++;
+      if (c.status === 'Selesai' || c.status === 'Done' || c.status === 'Completed') byStaff[name].done++;
+    });
+    var staffNames = Object.keys(byStaff);
+    if (staffNames.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Belum ada data checklist</td></tr>';
+      return;
+    }
+    tbody.innerHTML = staffNames.map(function(name) {
+      var s = byStaff[name];
+      var pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+      var auditCount = auditData.filter(function(a) { return (a.auditor || a.staf || '').toLowerCase() === name.toLowerCase(); }).length;
+      return '<tr><td data-label="Nama">' + escapeHtml(name) + '</td><td data-label="Tim">HK</td><td data-label="Checklist">' + s.total + '</td><td data-label="On Time">' + s.done + '</td><td data-label="% Compl">' + pct + '%</td><td data-label="Audit">' + auditCount + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-kpihk');
+    if (el) el.innerHTML = '<tr><td colspan="6" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    document.getElementById('hk-daily-rate').textContent = '0%';
+    document.getElementById('hk-gc-rate').textContent = '0%';
+    console.error(e);
+  }
+}
+
+async function loadCheckpointsData() {
+  try {
+    var res = await supabase.from('master_checkpoints').select('*').order('id_pos');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-checkpoints');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada checkpoint</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(c) {
+      var statusColor = c.status === 'Aktif' ? '#34d399' : '#f87171';
+      return '<tr><td data-label="ID Pos">' + escapeHtml(c.id_pos || c.kode || '-') + '</td><td data-label="Nama Pos">' + escapeHtml(c.nama_pos || c.nama || '-') + '</td><td data-label="Area">' + escapeHtml(c.area || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(c.status || 'Aktif') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-checkpoints');
+    if (el) el.innerHTML = '<tr><td colspan="4" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadSchedulesData() {
+  try {
+    var res = await supabase.from('master_jadwal').select('*').order('hari').order('jam_mulai');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-schedules');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada jadwal</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(j) {
+      return '<tr><td data-label="Hari">' + escapeHtml(j.hari || '-') + '</td><td data-label="Shift">' + escapeHtml(j.shift || '-') + '</td><td data-label="Personel">' + escapeHtml(j.personel || j.petugas || '-') + '</td><td data-label="Jam Mulai">' + escapeHtml(j.jam_mulai || '-') + '</td><td data-label="Jam Selesai">' + escapeHtml(j.jam_selesai || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-schedules');
+    if (el) el.innerHTML = '<tr><td colspan="5" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadBookingData() {
+  try {
+    var res = await supabase.from('asset_booking').select('*').order('id', { ascending: false }).limit(100);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-booking');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada booking</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(b) {
+      var statusColor = b.status_booking === 'Approved' || b.status_booking === 'Approved (Auto)' ? '#34d399' : (b.status_booking === 'Pending' ? '#fb923c' : '#f87171');
+      return '<tr><td data-label="Peminjam">' + escapeHtml(b.nama_peminjam || '-') + '</td><td data-label="Aset">' + escapeHtml(b.nama_aset || '-') + '</td><td data-label="Mulai">' + escapeHtml(b.tanggal_mulai ? new Date(b.tanggal_mulai).toLocaleDateString('id-ID') : '-') + '</td><td data-label="Selesai">' + escapeHtml(b.tanggal_selesai ? new Date(b.tanggal_selesai).toLocaleDateString('id-ID') : '-') + '</td><td data-label="Status" style="color:' + statusColor + '"><strong>' + escapeHtml(b.status_booking || '-') + '</strong></td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-booking');
+    if (el) el.innerHTML = '<tr><td colspan="5" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadAssetListData() {
+  try {
+    var res = await supabase.from('asset_list').select('*').order('id');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    _assetListData = data;
+    var tbody = document.getElementById('tbody-assetlist');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada aset</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(a, idx) {
+      var statusColor = a.status_operasional === 'Tersedia' ? '#34d399' : '#f87171';
+      return '<tr><td data-label="Kategori">' + escapeHtml(a.kategori || '-') + '</td><td data-label="Nama Aset">' + escapeHtml(a.nama_aset || '-') + '</td><td data-label="Detail">' + escapeHtml(a.detail_kapasitas || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(a.status_operasional || '-') + '</td>' +
+        '<td data-label="Aksi"><button class="btn btn-xs btn-outline" onclick="editAssetItem(' + a.id + ')">&#x270F;&#xFE0F;</button> <button class="btn btn-xs btn-danger" onclick="delAssetItem(' + a.id + ',\'' + escapeHtml(a.nama_aset) + '\')">&#x2716;</button></td></tr>';
+    }).join('');
+    injectMobileTableLabels();
+  } catch(e) {
+    var el = document.getElementById('tbody-assetlist');
+    if (el) el.innerHTML = '<tr><td colspan="5" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadChecklistData() {
+  try {
+    var res = await supabase.from('checklist_harian').select('*').order('id', { ascending: false }).limit(100);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-checklist');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada checklist</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(c) {
+      var statusColor = c.status === 'Selesai' || c.status === 'Done' ? '#34d399' : '#fb923c';
+      return '<tr><td data-label="Timestamp">' + escapeHtml(c.timestamp || c.created_at || '-') + '</td><td data-label="Staf">' + escapeHtml(c.staf || c.petugas || '-') + '</td><td data-label="Lokasi">' + escapeHtml(c.lokasi || c.ruangan || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(c.status || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-checklist');
+    if (el) el.innerHTML = '<tr><td colspan="4" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadAuditData() {
+  try {
+    var res = await supabase.from('audit_kebersihan').select('*').order('id', { ascending: false }).limit(100);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-audit');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada data audit</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(a) {
+      var statusColor = a.status === 'Lulus' || a.status === 'Pass' ? '#34d399' : (a.status === 'Pending' ? '#fb923c' : '#f87171');
+      return '<tr><td data-label="Timestamp">' + escapeHtml(a.tanggal || a.timestamp || '-') + '</td><td data-label="Auditor">' + escapeHtml(a.auditor || a.petugas || '-') + '</td><td data-label="Lokasi">' + escapeHtml(a.lokasi || a.ruangan || '-') + '</td><td data-label="Skor">' + (a.skor || a.nilai || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(a.status || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-audit');
+    if (el) el.innerHTML = '<tr><td colspan="5" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadGCData() {
+  try {
+    var res = await supabase.from('general_cleaning').select('*').order('id', { ascending: false }).limit(100);
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-gc');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada jadwal GC</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(g) {
+      var statusColor = g.status === 'Selesai' || g.status === 'Done' ? '#34d399' : '#fb923c';
+      return '<tr><td data-label="Lokasi">' + escapeHtml(g.lokasi || '-') + '</td><td data-label="Jenis">' + escapeHtml(g.jenis || g.tipe || '-') + '</td><td data-label="Target">' + escapeHtml(g.target || g.tanggal || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(g.status || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-gc');
+    if (el) el.innerHTML = '<tr><td colspan="4" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadMasterKosData() {
+  try {
+    var res = await supabase.from('master_kos').select('*').order('kode_kos');
+    if (res.error) throw res.error;
+    var data = res.data || [];
+    var tbody = document.getElementById('tbody-masterkos');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada data kos</td></tr>';
+      return;
+    }
+    // Get room counts
+    var kamarRes = await supabase.from('master_kamar').select('*');
+    var kamarList = (kamarRes.error ? [] : kamarRes.data) || [];
+
+    tbody.innerHTML = data.map(function(k) {
+      var jmlKamar = kamarList.filter(function(r) { return r.kode_kos === k.kode_kos; }).length;
+      var statusColor = k.status === 'Aktif' ? '#34d399' : '#f87171';
+      return '<tr><td data-label="Kode">' + escapeHtml(k.kode_kos || '-') + '</td><td data-label="Nama Kos">' + escapeHtml(k.nama_kos || '-') + '</td><td data-label="Jml Kamar">' + jmlKamar + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(k.status || 'Aktif') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-masterkos');
+    if (el) el.innerHTML = '<tr><td colspan="4" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadMasterKamarData() {
+  try {
+    var [kamarRes, kosRes] = await Promise.all([
+      supabase.from('master_kamar').select('*').order('kode_kamar'),
+      supabase.from('master_kos').select('kode_kos,nama_kos')
+    ]);
+    if (kamarRes.error) throw kamarRes.error;
+    var data = kamarRes.data || [];
+    var kosMap = {};
+    if (!kosRes.error && kosRes.data) {
+      kosRes.data.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    }
+    var tbody = document.getElementById('tbody-masterkamar');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada data kamar</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(k) {
+      var statusColor = k.status_kamar === 'Tersedia' ? '#34d399' : (k.status_kamar === 'Terisi' ? '#fb923c' : '#f87171');
+      return '<tr><td data-label="Kamar">' + escapeHtml(k.nama_kamar || k.kode_kamar || '-') + '</td><td data-label="Kos">' + escapeHtml(kosMap[k.kode_kos] || k.kode_kos || '-') + '</td><td data-label="Tipe">' + escapeHtml(k.tipe_kamar || '-') + '</td><td data-label="Harga">' + (k.harga_sewa ? 'Rp ' + Number(k.harga_sewa).toLocaleString('id-ID') : '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(k.status_kamar || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-masterkamar');
+    if (el) el.innerHTML = '<tr><td colspan="5" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadGuestBookingData() {
+  try {
+    var [gbRes, kamarRes] = await Promise.all([
+      supabase.from('guest_bookings').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('master_kamar').select('kode_kamar,status_kamar')
+    ]);
+    if (gbRes.error) throw gbRes.error;
+    var data = gbRes.data || [];
+    var kamarList = (kamarRes.error ? [] : kamarRes.data) || [];
+
+    var tersedia = kamarList.filter(function(k) { return k.status_kamar === 'Tersedia'; }).length;
+    var terisi = kamarList.filter(function(k) { return k.status_kamar === 'Terisi'; }).length;
+    document.getElementById('gb-tersedia').textContent = tersedia;
+    document.getElementById('gb-terisi').textContent = terisi;
+
+    var tbody = document.getElementById('tbody-guestbooking');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="table-empty">Belum ada booking tamu</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(g) {
+      var statusColor = g.status === 'Aktif' ? '#34d399' : (g.status === 'Pending' ? '#fb923c' : '#64748b');
+      return '<tr><td data-label="Kamar">' + escapeHtml(g.kode_kamar || '-') + '</td><td data-label="Tamu">' + escapeHtml(g.nama_tamu || '-') + '</td><td data-label="Check In">' + escapeHtml(g.tanggal_check_in || '-') + '</td><td data-label="Status" style="color:' + statusColor + '">' + escapeHtml(g.status || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-guestbooking');
+    if (el) el.innerHTML = '<tr><td colspan="4" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadRoomStatusData() {
+  try {
+    var [kamarRes, kosRes] = await Promise.all([
+      supabase.from('master_kamar').select('*').order('kode_kamar'),
+      supabase.from('master_kos').select('kode_kos,nama_kos')
+    ]);
+    if (kamarRes.error) throw kamarRes.error;
+    var data = kamarRes.data || [];
+    var kosMap = {};
+    if (!kosRes.error && kosRes.data) {
+      kosRes.data.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    }
+    var tbody = document.getElementById('tbody-roomstatus');
+    if (!tbody) return;
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="table-empty">Belum ada data kamar</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(k) {
+      var statusColor = k.status_kamar === 'Tersedia' ? '#34d399' : (k.status_kamar === 'Terisi' ? '#fb923c' : '#f87171');
+      return '<tr><td data-label="Kamar">' + escapeHtml(k.nama_kamar || k.kode_kamar || '-') + '</td><td data-label="Status" style="color:' + statusColor + '"><strong>' + escapeHtml(k.status_kamar || '-') + '</strong></td><td data-label="Kos">' + escapeHtml(kosMap[k.kode_kos] || k.kode_kos || '-') + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    var el = document.getElementById('tbody-roomstatus');
+    if (el) el.innerHTML = '<tr><td colspan="3" class="table-empty" style="color:#f87171">Gagal: ' + e.message + '</td></tr>';
+    console.error(e);
+  }
+}
+
+async function loadSurveyConfigData() {
+  try {
+    // Try multiple possible table names for survey config
+    var tables = ['survey_config', 'survey_config_teams', 'survey_config_kriteria', 'survey_ga_teams'];
+    var data = null;
+    for (var i = 0; i < tables.length; i++) {
+      var res = await supabase.from(tables[i]).select('*').limit(5);
+      if (!res.error && res.data && res.data.length > 0) {
+        data = res.data;
+        break;
+      }
+    }
+    // Show config info in the card body
+    var cardBody = document.querySelector('#main-content .card-body');
+    if (cardBody) {
+      if (data && data.length > 0) {
+        cardBody.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;text-align:center;padding:20px">' +
+          '&#x2705; Konfigurasi survey sudah tersedia (' + data.length + ' data). ' +
+          'Gunakan Supabase Dashboard untuk mengelola.</div>';
+      } else {
+        cardBody.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;text-align:center;padding:20px">' +
+          '&#x2139;&#xFE0F; Belum ada konfigurasi survey. Silakan tambah data di Supabase Dashboard.</div>';
+      }
+    }
+  } catch(e) {
+    var el = document.querySelector('#main-content .card-body');
+    if (el) el.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px">Gagal: ' + e.message + '</div>';
+    console.error(e);
+  }
+}
