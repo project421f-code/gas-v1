@@ -214,7 +214,7 @@ function showTrackerDetail(nama) {
   }
   var html = '<div class="table-wrap"><table><thead><tr><th>Kamar</th><th>Kos</th><th>Jenis</th><th>Selesai</th></tr></thead><tbody>';
   staff.kamarList.forEach(function(k) {
-    html += '<tr><td>' + escapeHtml(k.nomor_kamar) + '</td><td>' + escapeHtml(k.nama_kos) + '</td><td>' + escapeHtml(k.jenis) + '</td><td>' + escapeHtml(k.selesai_pada) + '</td></tr>';
+    html += '<tr><td>' + escapeHtml(k.nama_kamar) + '</td><td>' + escapeHtml(k.nama_kos) + '</td><td>' + escapeHtml(k.jenis) + '</td><td>' + escapeHtml(k.selesai_pada) + '</td></tr>';
   });
   html += '</tbody></table></div>';
   body.innerHTML = html;
@@ -571,4 +571,94 @@ function searchStatusColor(status) {
 
 function gotoSearchResult(page) {
   if (page && typeof showPage === 'function') showPage(page);
+}
+
+// ════════════════════════════════════════════════════════════
+// 6. IMPORT / EXPORT DATA (CSV)
+// ════════════════════════════════════════════════════════════
+async function renderDataTools(content) {
+  content.innerHTML = '<div class="page-header"><div class="page-title">Import / Export Data</div><div class="page-desc">Backup & transfer data via CSV</div></div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">&#x1F4E4; Export CSV</div></div>' +
+    '<div class="card-body">' +
+    '<div class="form-grid"><div class="form-group"><label class="form-label">Pilih Data</label><select class="form-control" id="f-export-table">' +
+    '<option value="maintenance">Tiket Maintenance</option>' +
+    '<option value="patrol">Log Patroli</option>' +
+    '<option value="inspection">Inspeksi Aset</option>' +
+    '<option value="booking">Booking Aset</option>' +
+    '<option value="checklist">Checklist Harian</option>' +
+    '<option value="audit">Audit Housekeeping</option>' +
+    '<option value="transaksi_kos">Transaksi Kos</option>' +
+    '<option value="kamar">Master Kamar</option></select></div></div>' +
+    '<button class="btn btn-primary" onclick="doExportCSV()">&#x1F4E4; Export CSV</button> ' +
+    '<div id="export-result" style="margin-top:10px;font-size:0.82rem;color:#64748b"></div>' +
+    '</div></div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">&#x1F4E5; Import CSV</div></div>' +
+    '<div class="card-body">' +
+    '<div class="form-grid"><div class="form-group"><label class="form-label">Tujuan Master Data</label><select class="form-control" id="f-import-sheet">' +
+    '<option value="Asset_List">Master Aset</option>' +
+    '<option value="Master_SLA">Master SLA</option>' +
+    '<option value="Master_CS_Schedule">Master Jadwal CS</option>' +
+    '<option value="Master_Lokasi">Master Lokasi</option>' +
+    '<option value="Master_Patrol_Checkpoints">Master Checkpoint</option>' +
+    '<option value="Master_Patrol_Schedule">Master Jadwal Patroli</option>' +
+    '<option value="User_List">User List</option></select></div>' +
+    '<div class="form-group full"><label class="form-label">Data CSV (baris pertama = header)</label>' +
+    '<textarea class="form-control" id="f-import-csv" rows="6" placeholder="kategori,nama_aset,detail_kapasitas,status_operasional&#10;Ruangan,Ruang Rapat Lt.2,Kapasitas 20 org,Tersedia"></textarea></div>' +
+    '<div class="form-group full"><label class="form-label">atau upload file CSV</label>' +
+    '<input type="file" class="form-control" id="f-import-file" accept=".csv,text/csv"></div></div>' +
+    '<button class="btn btn-primary" onclick="doImportData()">&#x1F4E5; Import Data</button> ' +
+    '<div id="import-result" style="margin-top:10px;font-size:0.82rem;color:#64748b"></div>' +
+    '</div></div>';
+}
+
+async function doExportCSV() {
+  var tableId = document.getElementById('f-export-table').value;
+  var res = document.getElementById('export-result');
+  res.textContent = 'Mengekspor...';
+  try {
+    var data = await apiCall('exportDataToCSV', [tableId]);
+    if (!data || !data.csv) { res.textContent = 'Tidak ada data untuk diekspor.'; return; }
+    var blob = new Blob(['\uFEFF' + data.csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = data.filename || (tableId + '.csv');
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    res.textContent = 'Export berhasil: ' + (data.filename || '') + ' (' + data.csv.split('\n').length + ' baris) — file terunduh.';
+  } catch (e) {
+    res.textContent = 'Gagal export: ' + e.message;
+  }
+}
+
+async function doImportData() {
+  var sheetId = document.getElementById('f-import-sheet').value;
+  var res = document.getElementById('import-result');
+  if (!sheetId) { res.textContent = 'Pilih master data tujuan.'; return; }
+
+  var csvText = document.getElementById('f-import-csv').value.trim();
+  var fileInput = document.getElementById('f-import-file');
+  if (!csvText && (!fileInput.files || fileInput.files.length === 0)) {
+    res.textContent = 'Upload file atau tempel data CSV.';
+    return;
+  }
+
+  try {
+    var csvData = csvText;
+    if (!csvData && fileInput.files.length > 0) {
+      csvData = await new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) { resolve(e.target.result); };
+        reader.onerror = function(e) { reject(new Error('Gagal membaca file.')); };
+        reader.readAsText(fileInput.files[0], 'UTF-8');
+      });
+    }
+    res.textContent = 'Mengimpor...';
+    await apiCall('importMasterData', [sheetId, csvData]);
+    res.textContent = 'Import berhasil! Data ditambahkan ke ' + sheetId + '.';
+    document.getElementById('f-import-csv').value = '';
+    fileInput.value = '';
+  } catch (e) {
+    res.textContent = 'Import gagal: ' + e.message;
+  }
 }

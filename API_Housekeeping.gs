@@ -716,14 +716,14 @@ function getAllMasterLokasi() {
       return withLock(function() {
         var existing = ss.getSheetByName(CONFIG.SHEETS.MASTER_LOKASI);
         if (existing) {
-          return successResponse(getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 3600));
+          return successResponse(getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 30));
         }
         createMasterLokasiSheetInternal(ss);
         return successResponse([]);
       });
     }
     
-    var data = getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 3600);
+    var data = getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 30);
     return successResponse(data);
   } catch (e) {
     return errorResponse(e.message);
@@ -741,6 +741,7 @@ function saveMasterLokasi(payload) {
 
     return withLock(function() {
       var sheet = getSheet(CONFIG.SHEETS.MASTER_LOKASI);
+      invalidateSheetCache(CONFIG.SHEETS.MASTER_LOKASI);
 
       if (payload._rowIndex) {
         // UPDATE
@@ -777,6 +778,7 @@ function deleteMasterLokasi(rowIndex) {
     return withLock(function() {
       var sheet = getSheet(CONFIG.SHEETS.MASTER_LOKASI);
       sheet.deleteRow(rowIndex);
+      invalidateSheetCache(CONFIG.SHEETS.MASTER_LOKASI);
       return successResponse(null, 'Lokasi berhasil dihapus.');
     });
   } catch (e) {

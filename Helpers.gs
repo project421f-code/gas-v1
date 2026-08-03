@@ -1578,6 +1578,20 @@ function sendFormatGuideOnce(sender) {
   }
 }
 
+/**
+ * Hapus cache sheet (dipanggil setelah operasi tulis agar data segar)
+ */
+function invalidateSheetCache(sheetName) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var key = 'csd_' + sheetName.replace(/[^a-zA-Z0-9]/g, '_');
+    cache.remove(key);
+    Logger.log('CACHE INVALIDATED: ' + sheetName);
+  } catch (e) {
+    Logger.log('Cache invalidation error: ' + e.message);
+  }
+}
+
 function getCachedSheetData(sheetName, ttlSeconds) {
   var cache = CacheService.getScriptCache();
   var key = 'csd_' + sheetName.replace(/[^a-zA-Z0-9]/g, '_');

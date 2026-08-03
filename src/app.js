@@ -70,6 +70,7 @@ function showPage(page, el) {
     case 'kosprep': renderKosPrep(content); break;
     case 'kostrx': renderKosTrx(content); break;
     case 'globalsearch': renderGlobalSearch(content); break;
+    case 'datatools': renderDataTools(content); break;
     case 'inspection': renderAssets(content); break;
     default: renderDashboard(content);
   }
@@ -151,6 +152,7 @@ function generateMobileMenu() {
     { page: 'kosprep', icon: '🧹', label: 'Persiapan', roles: ['Admin'] },
     { page: 'tracker', icon: '📊', label: 'Tracker', roles: ['Admin'] },
     { page: 'globalsearch', icon: '🔍', label: 'Cari', roles: null },
+    { page: 'datatools', icon: '📦', label: 'Import/Export', roles: ['Admin'] },
     { page: 'surveyconfig', icon: '📋', label: 'Konfig Survey', roles: ['Admin'] },
     { page: 'users', icon: '👥', label: 'Users', roles: ['Admin'] },
     { page: 'mastersla', icon: '⏱️', label: 'SLA', roles: ['Admin'] },
