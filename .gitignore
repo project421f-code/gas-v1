@@ -15,3 +15,13 @@ frontend/
 # ── Keamanan: token & file pribadi ─────────────────────────
 # _setup_wa_token.gs berisi token Fonnte hardcoded — JANGAN pernah di-commit.
 _setup_wa_token.gs
+
+# ── Artefak development (bukan bagian aplikasi) ────────────
+# Script Python sekali pakai (fix_*.py, integrate_*.py, dll.)
+*.py
+# Folder tes & npm (artefak tooling lokal)
+tests/
+package.json
+package-lock.json
+# File sampah artefak Windows
+nul
