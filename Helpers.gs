@@ -1372,7 +1372,7 @@ function getWebhookStatus() {
     var lastSummary = cache.get('webhook_last_summary');
     var lastTime = cache.get('webhook_last_time');
 
-    return {
+    return successResponse({
       wa_token_configured: !!token,
       wa_token_preview: token ? token.substring(0, 6) + '...' + token.slice(-4) : null,
       web_app_url: scriptUrl,
@@ -1381,7 +1381,7 @@ function getWebhookStatus() {
       last_webhook_time: lastTime ? new Date(parseInt(lastTime, 10)).toLocaleString('id-ID') : null,
       spreadsheet_id: CONFIG.SPREADSHEET_ID,
       timezone: CONFIG.TIMEZONE
-    };
+    });
   } catch (e) {
     Logger.log('getWebhookStatus Error: ' + e.message);
     return { error: e.message };

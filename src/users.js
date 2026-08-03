@@ -273,6 +273,12 @@ function renderSettings(content) {
   html += '<div id="wa-send-result" style="margin-top:10px;font-size:0.82rem;color:#64748b"></div>';
   html += '</div>';
 
+  // Webhook Status
+  html += '<div class="section-card">';
+  html += '<div class="section-title">&#x1F517; Status Webhook</div>';
+  html += '<div id="webhook-status-body" style="color:#94a3b8;font-size:0.82rem;line-height:1.7">Memeriksa status...</div>';
+  html += '</div>';
+
   // Info
   html += '<div class="section-card">';
   html += '<div class="section-title">&#x2139; Informasi</div>';
@@ -297,6 +303,28 @@ function renderSettings(content) {
       if (el) el.value = _settings.waToken;
     })
     .catch(function() { /* token opsional */ });
+
+  // Muat status webhook
+  loadWebhookStatus();
+}
+
+async function loadWebhookStatus() {
+  var body = document.getElementById('webhook-status-body');
+  if (!body) return;
+  try {
+    var s = await apiCall('getWebhookStatus', []);
+    if (!s) { body.innerHTML = '<div>Status tidak tersedia.</div>'; return; }
+    var tokenBadge = s.wa_token_configured ? '<span style="color:#34d399">&#x2705; Terpasang</span>' : '<span style="color:#f87171">&#x274C; Belum diisi</span>';
+    var rows = '';
+    rows += '<p><strong>WA Token:</strong> ' + tokenBadge + (s.wa_token_preview ? ' <code style="color:#a5b4fc">' + escapeHtml(s.wa_token_preview) + '</code>' : '') + '</p>';
+    rows += '<p><strong>Web App URL:</strong> <code style="display:block;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;margin:6px 0;font-size:0.75rem;word-break:break-all;color:#a5b4fc">' + escapeHtml(s.web_app_url || '-') + '</code></p>';
+    rows += '<p><strong>Webhook URL (doPost):</strong> <code style="display:block;padding:8px;background:rgba(255,255,255,0.05);border-radius:8px;margin:6px 0;font-size:0.75rem;word-break:break-all;color:#a5b4fc">' + escapeHtml(s.webhook_url || '-') + '</code></p>';
+    rows += '<p><strong>Webhook Terakhir:</strong> ' + (s.last_webhook_time ? escapeHtml(s.last_webhook_time) : '<span style="color:#64748b">Belum ada</span>') + '</p>';
+    if (s.last_webhook) rows += '<pre style="background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;font-size:0.72rem;overflow:auto;color:#94a3b8">' + escapeHtml(JSON.stringify(s.last_webhook, null, 2)) + '</pre>';
+    body.innerHTML = rows;
+  } catch (e) {
+    body.innerHTML = '<div style="color:#f87171">Gagal memuat status: ' + escapeHtml(e.message) + '</div>';
+  }
 }
 
 function saveSettingsForm() {
