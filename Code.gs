@@ -1,0 +1,618 @@
+/**
+ * ============================================================
+ * Code.gs — Entry Point & API Routing
+ * GA Operations Management System v1.0
+ * ============================================================
+ */
+
+// ─── WEB APP ENTRY POINT ────────────────────────────────────
+
+/**
+ * doGet() — Dipanggil saat user membuka URL Web App
+ * Menampilkan halaman utama (index.html)
+ */
+function doGet(e) {
+  // ─── TEST ENDPOINT: Simulasi webhook survey ────────────
+  // Buka URL ini di browser (login sebagai Admin) untuk test:
+  // ?testSurvey=1&tiket=MNT-2026-0017&rating=5
+  if (e && e.parameter && e.parameter.testSurvey) {
+    var tiketId = e.parameter.tiket || '';
+    var rating = parseInt(e.parameter.rating, 10);
+    if (tiketId && rating >= 1 && rating <= 5) {
+      var result = saveSurveyRating(tiketId, rating);
+      return ContentService
+        .createTextOutput(JSON.stringify(result, null, 2))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: 'Parameter tidak valid. Gunakan ?testSurvey=1&tiket=ID&rating=1-5' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ─── TEST ENDPOINT: Simulasi webhook Fonnte penuh ──────
+  // Buka URL ini di browser (login sebagai Admin) untuk test:
+  // ?testWebhook=1&sender=6282247008466&message=5
+  if (e && e.parameter && e.parameter.testWebhook) {
+    var testPayload = {
+      sender: e.parameter.sender || '6282247008466',
+      message: e.parameter.message || '5',
+      name: e.parameter.name || 'Test Customer'
+    };
+    var result = handleIncomingWhatsApp(testPayload);
+    return ContentService
+      .createTextOutput(JSON.stringify(result, null, 2))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ─── SITEMAP PAGE: Daftar Layanan GA — DEFAULT ────
+  // Halaman ini adalah default landing page.
+  // Menampilkan semua layanan GA dalam bentuk kartu.
+  // ?page=home  (eksplisit)
+  // Tanpa parameter → otomatis ke sitemap
+  var page = e && e.parameter ? e.parameter.page || '' : '';
+  var isSitemapPage = !page && !(e && e.parameter && (
+    e.parameter.action || e.parameter.testSurvey || e.parameter.testWebhook || 
+    e.parameter.testDrive || e.parameter.fixAuditHeaders || e.parameter.cleanupBase64AuditPhotos || 
+    e.parameter.initMissingSheets || e.parameter.seedDummy || e.parameter.testWAPhoto
+  ));
+  
+  if (page === 'cek-aset' || isSitemapPage) {
+    // Jika tanpa parameter, tampilkan sitemap dulu
+    if (isSitemapPage) {
+      try {
+        return HtmlService
+          .createHtmlOutput(generateSitemapPageHtml())
+          .setTitle('GA Operations | General Affair')
+          .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+          .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      } catch (err) {
+        Logger.log('Sitemap Page Error: ' + err.message);
+        // Fallback: redirect to booking
+        var scriptUrl = ScriptApp.getService().getUrl();
+        return HtmlService
+          .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><script>window.top.location.href="' + scriptUrl + '?page=cek-aset"</script></body></html>');
+      }
+    }
+    
+    // ─── CEK ASET PAGE ────────────────────────────────
+    // ?page=cek-aset  → booking page
+    var tanggal = e.parameter.date || '';
+    var wa = e.parameter.wa || '';
+    var bookingResult = null;
+    
+    try {
+      if (e.parameter.book === '1') {
+        var payload = {
+          nama_peminjam: e.parameter.nama || '',
+          divisi: e.parameter.divisi || '',
+          no_wa: e.parameter.wa || '',
+          nama_aset: e.parameter.aset || '',
+          waktu_mulai: e.parameter.mulai || '',
+          waktu_selesai: e.parameter.selesai || '',
+          konsumsi: e.parameter.konsumsi || 'Tidak',
+          km_awal: e.parameter.km || ''
+        };
+        bookingResult = publicBooking(payload);
+      }
+    } catch (err) {
+      Logger.log('Public Booking Error: ' + err.message);
+      bookingResult = { success: false, error: 'Gagal memproses booking: ' + err.message };
+    }
+    
+    try {
+      return HtmlService
+        .createHtmlOutput(generatePublicPageHtml(tanggal, wa, bookingResult))
+        .setTitle('Cek Ketersediaan Aset | General Affair')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      Logger.log('Public Page Render Error: ' + err.message);
+      var scriptUrl = ScriptApp.getService().getUrl();
+      return HtmlService
+        .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><h2>❌ Terjadi Kesalahan</h2><p style="color:#94a3b8">' + err.message.replace(/\"/g,'&quot;') + '</p><br><a href="' + scriptUrl + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a></body></html>')
+        .setTitle('Error | Cek Ketersediaan Aset');
+    }
+  }
+
+  // ─── SURVEY PAGE: Kepuasan Pelayanan GA ───────────
+  // ?page=survey  → tampilkan form survey publik
+  // ?page=survey&submit=1&divisi=...&...  → proses submit survey
+  // Publik — bisa diakses tanpa login
+  if (e && e.parameter && e.parameter.page === 'survey') {
+    try {
+      var surveyResult = null;
+      if (e.parameter.submit === '1') {
+        var surveyPayload = {
+          divisi: e.parameter.divisi || '',
+          feedback: e.parameter.feedback || ''
+        };
+        // Collect all team_criteria ratings
+        ['mnt','hk','gs','aset'].forEach(function(t) {
+          ['keramahan','fast_response','3s','kualitas_kerja','komunikasi'].forEach(function(c) {
+            var key = t + '_' + c;
+            surveyPayload[key] = e.parameter[key] || '';
+          });
+        });
+        surveyResult = submitSurvey(surveyPayload);
+      }
+      return HtmlService
+        .createHtmlOutput(generateSurveyPageHtml(surveyResult))
+        .setTitle('Survey Kepuasan GA | ' + CONFIG.ORG_NAME)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      return HtmlService
+        .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><h2>❌ Terjadi Kesalahan</h2><p style="color:#94a3b8">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>')
+        .setTitle('Error | Survey GA');
+    }
+  }
+
+  // ─── SITEMAP PAGE (eksplisit) ──────────────────
+  // ?page=home  → tampilkan halaman sitemap
+  if (page === 'home') {
+    try {
+      return HtmlService
+        .createHtmlOutput(generateSitemapPageHtml())
+        .setTitle('GA Operations | General Affair')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      Logger.log('Sitemap Error: ' + err.message);
+      var scriptUrl = ScriptApp.getService().getUrl();
+      return HtmlService
+        .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><h2>Terjadi Kesalahan</h2><p style="color:#94a3b8">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>');
+    }
+  }
+
+  // ─── ADMIN APP: Login & Dashboard ────────────────
+  // ?page=app  → tampilkan shell yang load app dari CDN
+  if (e && e.parameter && e.parameter.page === 'app') {
+    try {
+      var htmlOutput = HtmlService.createHtmlOutputFromFile('index');
+      var htmlContent = htmlOutput.getContent();
+      
+      // Inject CDN_URL dari PropertiesService
+      var cdnUrl = getSetting('CDN_URL');
+      if (!cdnUrl) {
+        // Fallback: coba dari parameter URL (untuk setup)
+        cdnUrl = e.parameter.cdn || '';
+      }
+      htmlContent = htmlContent.replace('__CDN_URL__', cdnUrl);
+      
+      return HtmlService
+        .createHtmlOutput(htmlContent)
+        .setTitle(CONFIG.APP_NAME + ' | ' + CONFIG.ORG_NAME)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      Logger.log('Admin App Error: ' + err.message);
+      var scriptUrl = ScriptApp.getService().getUrl();
+      return HtmlService
+        .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><h2>❌ Gagal memuat aplikasi</h2><p style="color:#94a3b8">' + err.message.replace(/\"/g,'&quot;') + '</p><br><a href="' + scriptUrl + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a></body></html>')
+        .setTitle('Error | ' + CONFIG.APP_NAME);
+    }
+  }
+
+  // ─── TEST DRIVE ENDPOINT ─────────────────────────────
+  // Buka URL ini untuk menguji akses Drive & memicu authorization:
+  // ?testDrive=1
+  // Jika belum authorize, GAS akan minta izin. Setelah approve, buka lagi.
+  if (e && e.parameter && e.parameter.testDrive) {
+    try {
+      var testFolderName = 'GA_Test_' + new Date().getTime();
+      var testFolder = DriveApp.createFolder(testFolderName);
+      var testFile = testFolder.createFile('test.txt', 'Test file - GA Operations Drive access works!');
+      testFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      var folderUrl = testFolder.getUrl();
+      var fileUrl = testFile.getUrl();
+      // Cleanup: hapus test files
+      testFile.setTrashed(true);
+      testFolder.setTrashed(true);
+      
+      var result = { success: true, message: '✅ Akses Drive berfungsi!', folderUrl: folderUrl, fileUrl: fileUrl };
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2 style="color:#34d399">✅ Drive Access OK</h2>' +
+        '<p style="color:#94a3b8">Google Drive berfungsi dengan baik! File test berhasil dibuat & dihapus.</p>' +
+        '<pre style="color:#94a3b8;text-align:left;max-width:600px;margin:20px auto;background:rgba(255,255,255,0.05);padding:16px;border-radius:12px">' +
+        JSON.stringify(result, null, 2) + '</pre>' +
+        '<br>' +
+        '<a href="' + ScriptApp.getService().getUrl() + '?page=home" style="color:#6366f1;display:inline-block;padding:12px 24px;border:1px solid #6366f1;border-radius:10px;text-decoration:none;font-weight:600">🏠 Kembali ke beranda</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Test Drive | GA Operations');
+    } catch (err) {
+      var errMsg = err.message ? err.message.replace(/\"/g,'&quot;') : 'Unknown error';
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2 style="color:#ef4444">❌ Drive Access Error</h2>' +
+        '<p style="color:#fca5a5">Gagal mengakses Drive:</p>' +
+        '<pre style="color:#fca5a5;text-align:left;max-width:600px;margin:20px auto;background:rgba(239,68,68,0.1);padding:16px;border-radius:12px">' +
+        errMsg + '</pre>' +
+        '<br>' +
+        '<p style="color:#94a3b8">Kemungkinan: Drive App belum di-authorize. Buka GAS Editor → Run fungsi apapun yang pakai DriveApp → Approve izin → deploy ulang.</p>' +
+        '<a href="https://script.google.com/home/projects/1nbdV_VaGIzVC1vb9QTAvGnWawtF7zYTX3GdpCk5rgSgR6IhIkxLzvobd/edit" target="_blank" style="color:#6366f1;display:inline-block;padding:12px 24px;border:1px solid #6366f1;border-radius:10px;text-decoration:none;font-weight:600;margin-top:12px">🔑 Buka GAS Editor</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Test Drive | GA Operations');
+    }
+  }
+
+  // ─── FIX AUDIT HEADERS ENDPOINT ──────────────────────
+  // Buka URL ini di browser untuk memperbaiki misalignment kolom catatan/foto_temuan:
+  // ?fixAuditHeaders=1
+  // AMAN: hanya memperbaiki header dan data yang salah urutan
+  if (e && e.parameter && e.parameter.fixAuditHeaders) {
+    try {
+      var result = fixAuditHousekeepingHeaders();
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>🔧 Fix Audit Headers</h2><pre style="color:#94a3b8;text-align:left;max-width:600px;margin:20px auto;background:rgba(255,255,255,0.05);padding:16px;border-radius:12px">' +
+        JSON.stringify(result, null, 2) + '</pre>' +
+        '<br><a href="' + ScriptApp.getService().getUrl() + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Fix Audit Headers | GA Operations');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>❌ Error</h2><p style="color:#fca5a5">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>'
+      ).setTitle('Error | GA Operations');
+    }
+  }
+
+  // ─── TEST WA PHOTO TO DRIVE ────────────────────────
+  // Buka URL ini untuk test simpan file ke Google Drive:
+  // ?testWAPhoto=1
+  // Test ini membuat dummy file dulu, lalu coba download dari URL jika disediakan
+  if (e && e.parameter && e.parameter.testWAPhoto) {
+    try {
+      var results = [];
+      
+      // Test 1: Buat folder & file test sederhana
+      try {
+        var folderName = 'GA_Complaint_Photos';
+        var folders = DriveApp.getFoldersByName(folderName);
+        var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+        
+        var testFile = folder.createFile('test_' + new Date().getTime() + '.txt', 'GA Operations - Drive test file. Created: ' + nowFormatted());
+        testFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        results.push({ test: 'Buat folder & file test', success: true, url: testFile.getUrl(), name: testFile.getName() });
+      } catch (e) {
+        results.push({ test: 'Buat folder & file test', success: false, error: e.message });
+      }
+      
+      // Test 2: Download dari URL (jika disediakan parameter url)
+      var testUrl = e.parameter.url;
+      if (testUrl) {
+        try {
+          var photoResult = savePhotoFromUrlToDrive(testUrl, 'GA_Complaint_Photos', 'test_download');
+          if (photoResult.success) {
+            results.push({ test: 'Download dari URL: ' + testUrl.substring(0, 80), success: true, url: photoResult.data.url, name: photoResult.data.name });
+          } else {
+            results.push({ test: 'Download dari URL', success: false, error: photoResult.error });
+          }
+        } catch (e) {
+          results.push({ test: 'Download dari URL', success: false, error: e.message });
+        }
+      } else {
+        results.push({ test: 'Download dari URL', success: true, skipped: true, message: 'Tidak ada parameter &url=. Gunakan ?testWAPhoto=1&url=IMAGE_URL untuk test download.' });
+      }
+      
+      // Hasil
+      var allOk = results.every(function(r) { return r.success === true; });
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>' + (allOk ? '📷✅ Drive Siap!' : '⚠️ Drive OK tapi ada catatan') + '</h2>' +
+        '<pre style="color:#94a3b8;text-align:left;max-width:700px;margin:20px auto;background:rgba(255,255,255,0.05);padding:16px;border-radius:12px;overflow-x:auto">' +
+        JSON.stringify(results, null, 2) + '</pre><br>';
+      
+      if (results[0] && results[0].url) {
+        html += '<a href="' + results[0].url + '" target="_blank" style="color:#6366f1;display:inline-block;padding:12px 24px;border:1px solid #6366f1;border-radius:10px;text-decoration:none;font-weight:600;margin-bottom:12px">📂 Buka File Test</a><br>';
+      }
+      html += '<a href="https://drive.google.com/drive/search?q=GA_Complaint_Photos" target="_blank" style="color:#94a3b8;font-size:0.85rem">📂 Buka Folder GA_Complaint_Photos</a>' +
+        '<br><br><hr style="border-color:rgba(255,255,255,0.1);margin:20px 0">' +
+        '<p style="color:#94a3b8;font-size:0.85rem">💡 Untuk test download foto dari URL: <code style="color:#e0e7ff">?testWAPhoto=1&url=https://contoh.com/foto.jpg</code></p>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Test WA Photo | GA Operations');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>❌ Error</h2><p style="color:#fca5a5">' + err.message.replace(/"/g,'&quot;') + '</p></body></html>'
+      ).setTitle('Error | GA Operations');
+    }
+  }
+
+  // ─── CLEANUP BASE64 ENDPOINT ────────────────────────
+  // Buka URL ini di browser untuk membersihkan data base64 foto lama:
+  // ?cleanupBase64AuditPhotos=1
+  // AMAN: hanya mengosongkan cell foto_temuan yang berisi data:image base64
+  if (e && e.parameter && e.parameter.cleanupBase64AuditPhotos) {
+    try {
+      var result = cleanupBase64AuditPhotos();
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>🧹 Cleanup Base64 Foto</h2><pre style="color:#94a3b8;text-align:left;max-width:600px;margin:20px auto">' +
+        JSON.stringify(result, null, 2) + '</pre>' +
+        '<br><a href="' + ScriptApp.getService().getUrl() + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Cleanup Base64 | GA Operations');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>❌ Error</h2><p style="color:#fca5a5">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>'
+      ).setTitle('Error | GA Operations');
+    }
+  }
+
+  // ─── SEED DUMMY DATA ENDPOINT ────────────────────
+  // Buka URL ini di browser untuk mengisi 1 baris dummy data per tabel:
+  // ?seedDummy=1
+  if (e && e.parameter && e.parameter.seedDummy) {
+    try {
+      var result = seedDummyData();
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>🌱 Seed Dummy Data</h2><pre style="color:#94a3b8;text-align:left;max-width:600px;margin:20px auto;background:rgba(255,255,255,0.05);padding:16px;border-radius:12px">' +
+        JSON.stringify(result, null, 2) + '</pre>' +
+        '<br><a href="' + ScriptApp.getService().getUrl() + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Seed Data | GA Operations');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>❌ Error</h2><p style="color:#fca5a5">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>'
+      ).setTitle('Error | GA Operations');
+    }
+  }
+
+  // ─── INIT DB ENDPOINT ─────────────────────────────
+  // Buka URL ini di browser untuk membuat sheet yang belum ada:
+  // ?initMissingSheets=1
+  // AMAN: hanya membuat sheet yang belum ada, tidak menghapus data apapun
+  if (e && e.parameter && e.parameter.initMissingSheets) {
+    try {
+      var result = initializeMissingSheetsOnly();
+      var html = '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>✅ Inisialisasi Selesai</h2><pre style="color:#94a3b8;text-align:left;max-width:600px;margin:20px auto">' +
+        JSON.stringify(result, null, 2) + '</pre>' +
+        '<br><a href="' + ScriptApp.getService().getUrl() + '?page=home" style="color:#6366f1">🏠 Kembali ke beranda</a>' +
+        '</body></html>';
+      return HtmlService.createHtmlOutput(html).setTitle('Init DB | GA Operations');
+    } catch (err) {
+      return HtmlService.createHtmlOutput(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff">' +
+        '<h2>❌ Error</h2><p style="color:#fca5a5">' + err.message.replace(/\"/g,'&quot;') + '</p></body></html>'
+      ).setTitle('Error | GA Operations');
+    }
+  }
+
+  // ─── PUBLIC JSON API ──────────────────────────────
+  // Endpoint untuk akses eksternal (via fetch() dari luar GAS)
+  // ?action=getAssets&date=2026-07-20  →  JSON daftar aset
+  // ?action=book&nama=...&wa=...&aset=...  →  JSON hasil booking
+  if (e && e.parameter && e.parameter.action) {
+    return handlePublicApi(e);
+  }
+
+  // ─── DEFAULT: Sitemap ───────────────────────────
+  // Fallback safety — redirect ke sitemap
+  return HtmlService
+    .createHtmlOutput('<html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0f1e;color:#e0e7ff"><h2>🚀 GA Operations</h2><p style="color:#94a3b8">Mengarahkan...</p><script>window.top.location.href="' + ScriptApp.getService().getUrl() + '?page=home"</script></body></html>')
+    .setTitle(CONFIG.APP_NAME);
+}
+
+// ─── WEB APP ENTRY POINT — POST (fetch dari GitHub Pages) ────
+
+/**
+ * doPost() — Endpoint JSON untuk frontend yang di-host di GitHub Pages
+ * Frontend memanggil dengan fetch():
+ *
+ *   fetch(WEBAPP_URL, {
+ *     method: 'POST',
+ *     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+ *     body: JSON.stringify({ email, sessionToken, actionName, args })
+ *   })
+ *
+ * @return {ContentService} JSON response dari executeAction()
+ */
+function doPost(e) {
+  try {
+    var payload = {};
+    try {
+      payload = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      // Fallback: parse URL-encoded jika bukan JSON
+      if (e.parameter) {
+        payload = {
+          email: e.parameter.email || '',
+          sessionToken: e.parameter.sessionToken || '',
+          actionName: e.parameter.actionName || '',
+          args: e.parameter.args ? JSON.parse(e.parameter.args) : []
+        };
+      }
+    }
+
+    var email = payload.email || '';
+    var sessionToken = payload.sessionToken || '';
+    var actionName = payload.actionName || '';
+    var args = payload.args || [];
+
+    var result = executeAction(email, sessionToken, actionName, args);
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log('doPost Error: ' + err.message);
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── API ROUTING ─────────────────────────────────────────────
+
+/**
+ * executeAction() — Router utama untuk semua panggilan dari frontend
+ * Semua fungsi API dipanggil melalui fungsi ini dengan validasi sesi
+ *
+ * @param {string} email - Email user yang sedang login
+ * @param {string} sessionToken - Token sesi (dari CacheService)
+ * @param {string} actionName - Nama fungsi yang akan dipanggil
+ * @param {Array} args - Array argumen untuk fungsi tersebut
+ * @return {Object} Response dari fungsi yang dipanggil
+ */
+function executeAction(email, sessionToken, actionName, args) {
+  try {
+    // Daftar fungsi yang boleh dipanggil tanpa autentikasi
+    var publicActions = [
+      'loginWithEmailAndPassword',
+      'loginWithGoogleSSO',
+      'checkGoogleSSO',
+      'getAppInfo',
+      'getPublicAssetsAvailability',
+      'publicBooking'
+    ];
+
+    // Jika bukan public action, validasi token
+    if (publicActions.indexOf(actionName) === -1) {
+      if (!email || !sessionToken) {
+        return errorResponse('Sesi tidak valid. Silakan login ulang.');
+      }
+
+      // Validasi token dari CacheService
+      if (!validateSessionToken(email, sessionToken)) {
+        return { success: false, error: 'Sesi telah berakhir. Silakan login ulang.', sessionExpired: true };
+      }
+
+      // Set current user email untuk digunakan di seluruh API
+      CURRENT_USER_EMAIL = email;
+    }
+
+    // Cari dan panggil fungsi secara dinamis
+    var fn = resolveFunction(actionName);
+    if (typeof fn !== 'function') {
+      return errorResponse('Fungsi "' + actionName + '" tidak ditemukan.');
+    }
+
+    // Panggil fungsi dengan argumen
+    if (args && args.length > 0) {
+      return fn.apply(this, args);
+    } else {
+      return fn();
+    }
+
+  } catch (e) {
+    Logger.log('executeAction Error [' + actionName + ']: ' + e.message);
+    return errorResponse(e.message);
+  }
+}
+
+// ─── FUNCTION REGISTRY ───────────────────────────────────────
+
+/**
+ * Resolve fungsi dari nama secara dinamis
+ * GAS V8 strict mode: this[name] TIDAK bisa akses fungsi global.
+ * Harus pakai globalThis[name] yang selalu mengacu ke global scope.
+ */
+function resolveFunction(name) {
+  // globalThis adalah standar ES2020 untuk mengakses global object
+  // Di GAS V8, globalThis berisi SEMUA fungsi dari semua file .gs
+  if (typeof globalThis !== 'undefined') {
+    if (typeof globalThis[name] === 'function') {
+      return globalThis[name];
+    }
+  }
+  // Fallback: coba dari this (untuk non-strict mode)
+  if (typeof this[name] === 'function') {
+    return this[name];
+  }
+  return null;
+}
+
+// ─── UTILITY ENDPOINTS ──────────────────────────────────────
+
+/**
+ * Mendapatkan informasi aplikasi (publik)
+ */
+function getAppInfo() {
+  return successResponse({
+    appName: CONFIG.APP_NAME,
+    orgName: CONFIG.ORG_NAME,
+    version: CONFIG.VERSION
+  });
+}
+
+/**
+ * Helper untuk GAS include() pattern
+ * Memuat konten dari file .html lain ke dalam template
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/**
+ * Cek apakah Google SSO tersedia
+ * Mengembalikan email Google aktif jika ada
+ */
+/**
+ * Generate landing page (sitemap) HTML
+ * Menampilkan halaman depan GA Operations dengan link ke fitur publik & admin
+ */
+function generateSitemapPageHtml() {
+  var baseUrl = ScriptApp.getService().getUrl();
+  return HtmlService.createHtmlOutput(
+    '<!DOCTYPE html><html lang="id"><head>' +
+    '<meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">' +
+    '<title>GA Operations | General Affair</title>' +
+    '<style>' +
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;' +
+    'background:linear-gradient(135deg,#0a0f1e,#111936,#0d1229);min-height:100vh;color:#e0e7ff;' +
+    'display:flex;flex-direction:column;align-items:center;padding:40px 20px}' +
+    '.logo{width:64px;height:64px;margin:0 auto 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);' +
+    'border-radius:16px;display:flex;align-items:center;justify-content:center;' + '.logo svg{width:64px;height:64px}' +
+    'box-shadow:0 0 30px rgba(99,102,241,0.3)}' +
+    'h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}' +
+    '.subtitle{color:#94a3b8;font-size:0.85rem;margin-bottom:32px}' +
+    '.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));' +
+    'gap:16px;width:100%;max-width:900px}' +
+    '.card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);' +
+    'border-radius:16px;padding:24px;text-align:center;transition:all 0.25s ease;' +
+    'text-decoration:none;color:#e0e7ff;display:block}' +
+    '.card:hover{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.15);' +
+    'transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,0,0,0.2)}' +
+    '.card-icon{font-size:2rem;margin-bottom:12px}' +
+    '.card-title{font-size:1rem;font-weight:600;margin-bottom:4px}' +
+    '.card-desc{font-size:0.78rem;color:#94a3b8}' +
+    '.footer{margin-top:40px;color:#475569;font-size:0.75rem;text-align:center}' +
+    '.admin-link{display:inline-block;margin-top:24px;padding:10px 24px;' +
+    'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border-radius:12px;' +
+    'text-decoration:none;font-weight:600;font-size:0.85rem;transition:all 0.25s ease}' +
+    '.admin-link:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(99,102,241,0.4)}' +
+    '</style></head><body>' +
+    '<div class="logo"><svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ll"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#ll)"/><rect x="5" y="5" width="54" height="54" rx="11" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.8" opacity="0.3"/><text x="32" y="34" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="800" font-size="16" fill="white" letter-spacing="2">GAS</text><text x="32" y="47" text-anchor="middle" dominant-baseline="central" font-family="Inter,sans-serif" font-weight="500" font-size="4.5" fill="#c4b5fd" letter-spacing="0.6">Operations</text></svg></div>' +
+    '<h1>GA Operations</h1>' +
+    '<p class="subtitle">Sistem Manajemen Operasional General Affair</p>' +
+    '<div class="grid">' +
+    '<a class="card" href="' + baseUrl + '?page=cek-aset">' +
+    '<div class="card-icon">📅</div>' +
+    '<div class="card-title">Cek Ketersediaan Aset</div>' +
+    '<div class="card-desc">Lihat jadwal & booking peminjaman aset kantor</div></a>' +
+    '<a class="card" href="' + baseUrl + '?page=survey">' +
+    '<div class="card-icon">📋</div>' +
+    '<div class="card-title">Survey Kepuasan GA</div>' +
+    '<div class="card-desc">Berikan penilaian layanan General Affair</div></a>' +
+    '</div>' +
+    '<a class="admin-link" href="' + baseUrl + '?page=app">🔐 Admin Login</a>' +
+    '<div class="footer">GA Operations v1.0 &mdash; Sistem Terintegrasi</div>' +
+    '</body></html>'
+  ).getContent();
+}
+
+function checkGoogleSSO() {
+  try {
+    var email = Session.getActiveUser().getEmail();
+    if (email) {
+      return successResponse({ email: email });
+    }
+    return successResponse({ email: null });
+  } catch (e) {
+    return successResponse({ email: null });
+  }
+}
+
+
+

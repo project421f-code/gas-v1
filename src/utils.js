@@ -6,7 +6,9 @@ function escapeHtml(str) {
 function formatTime(ts) {
   if (!ts) return '';
   try {
-    var d = new Date(ts);
+    // Spreadsheet menyimpan timestamp sebagai 'yyyy-MM-dd HH:mm:ss' (bukan ISO)
+    var d = new Date(String(ts).replace(' ', 'T'));
+    if (isNaN(d.getTime())) return ts;
     return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
   } catch(e) { return ts; }
 }
@@ -169,7 +171,9 @@ function sendLinkToWA(phoneId, resultId, btnId) {
   }
   if (btn) { btn.disabled = true; btn.innerHTML = '\u23F3 Mengirim...'; }
 
-  var waUrl = 'https://wa.me/' + phone.replace(/[^0-9]/g, '') + '?text=' + encodeURIComponent('Halo, silakan cek ketersediaan aset GA melalui link berikut: ' + window.location.origin + '/public');
+  // Path relatif agar bekerja di GitHub Pages (mis. /repo/index.html?page=public)
+  var publicUrl = window.location.pathname + '?page=public';
+  var waUrl = 'https://wa.me/' + phone.replace(/[^0-9]/g, '') + '?text=' + encodeURIComponent('Halo, silakan cek ketersediaan aset GA melalui link berikut: ' + window.location.origin + publicUrl);
   window.open(waUrl, '_blank');
 
   if (resultDiv) {

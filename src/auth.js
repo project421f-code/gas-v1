@@ -7,76 +7,49 @@ async function doLogin() {
   var btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = '\u23F3 Memproses...';
 
-  // Check if Supabase is ready
-  if (!supabaseReady || !supabase) {
+  // Check backend GAS
+  if (!gasConfigured()) {
     btn.disabled = false; btn.textContent = 'Login';
-    showLoginError('Gagal: Library Supabase tidak terload. Coba refresh halaman atau periksa koneksi internet.');
-    console.error('Supabase not ready. CDN may have failed to load.');
+    showLoginError('URL Web App GAS belum diatur. Hubungi Admin untuk mengisi URL di menu Pengaturan.');
     return;
   }
 
   try {
-    // Use Supabase Auth to sign in
-    var authRes = await supabase.auth.signInWithPassword({ email: email, password: password });
+    // Login via GAS — verifikasi email & password di spreadsheet
+    var data = await apiCall('loginWithEmailAndPassword', [email, password]);
 
-    if (authRes.error) {
-      btn.disabled = false; btn.textContent = 'Login';
-      if (authRes.error.message.includes('Invalid login')) {
-        showLoginError('Email atau password salah.');
-      } else {
-        showLoginError(authRes.error.message);
-      }
-      return;
-    }
+    // data: { email, nama, role, tim, userId, token, loginMode }
+    var user = {
+      user_id: data.userId || '',
+      email: data.email,
+      nama: data.nama,
+      role: data.role,
+      tim: data.tim,
+      status: 'Aktif',
+      no_wa: data.no_wa || ''
+    };
+    saveSession(user, data.token);
 
-    // Fetch user profile from user_list
-    var profileRes = await supabase.from('user_list').select('*').eq('email', email).single();
-
-    if (profileRes.error || !profileRes.data) {
-      await supabase.auth.signOut();
-      btn.disabled = false; btn.textContent = 'Login';
-      showLoginError('Profil user tidak ditemukan. Hubungi Admin.');
-      return;
-    }
-
-    if (profileRes.data.status !== 'Aktif') {
-      await supabase.auth.signOut();
-      btn.disabled = false; btn.textContent = 'Login';
-      showLoginError('Akun Anda tidak aktif. Hubungi Admin.');
-      return;
-    }
-
-    // Success
-    APP.user = profileRes.data;
     btn.disabled = false; btn.textContent = 'Login';
-    showToast('Selamat datang, ' + profileRes.data.nama + '!', 'success');
+    showToast('Selamat datang, ' + data.nama + '!', 'success');
     hideLoginScreen();
     initApp();
-
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Login';
-    // Show actual error for debugging
-    var msg = 'Gagal terhubung ke server.';
-    if (e.message) {
-      if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        msg += ' Periksa koneksi internet.';
-      } else if (e.message.includes('timeout') || e.message.includes('timed out')) {
-        msg += ' Koneksi timeout. Coba lagi.';
-      } else {
-        msg += ' ' + e.message;
-      }
-    }
-    showLoginError(msg);
-    console.error('Login error:', e);
+    showLoginError(e.message || 'Gagal terhubung ke server.');
   }
 }
 
-async function doLogout() {
-  APP.user = null;
-  await supabase.auth.signOut();
+function doLogout() {
+  // Informasikan server (fire-and-forget), lalu bersihkan sesi lokal
+  try { apiCall('logoutUser', []).catch(function() {}); } catch(e) { /* ignore */ }
+  clearSession();
+
   // Reset form
-  document.getElementById('login-email').value = '';
-  document.getElementById('login-password').value = '';
+  var emailEl = document.getElementById('login-email');
+  var passEl = document.getElementById('login-password');
+  if (emailEl) emailEl.value = '';
+  if (passEl) passEl.value = '';
   hideLoginError();
   var layout = document.getElementById('app-layout');
   if (layout) layout.classList.remove('show');

@@ -17,18 +17,14 @@ function showKamarDetail(i) {
 async function renderGuests(content) {
   content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data kos...</div>';
   try {
-    var [kosRes, kamarRes, guestRes] = await Promise.all([
-      supabase.from('master_kos').select('*').order('kode_kos'),
-      supabase.from('master_kamar').select('*').order('kode_kamar'),
-      supabase.from('guest_bookings').select('*').order('created_at', { ascending: false })
+    var [kosList, kamarList, guestList] = await Promise.all([
+      apiCall('getAllKos', []),
+      apiCall('getAllKamar', []),
+      apiCall('getAllGuestBookings', [])
     ]);
-    if (kosRes.error) throw kosRes.error;
-    if (kamarRes.error) throw kamarRes.error;
-    if (guestRes.error) throw guestRes.error;
-
-    var kosList = kosRes.data || [];
-    var kamarList = kamarRes.data || [];
-    var guestList = guestRes.data || [];
+    kosList = kosList || [];
+    kamarList = kamarList || [];
+    guestList = guestList || [];
     _guestKamarData = kamarList;
     _guestKosData = kosList;
 
@@ -92,9 +88,7 @@ async function renderGuests(content) {
 async function renderMasterSLA(content) {
   content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data SLA...</div>';
   try {
-    var res = await supabase.from('master_sla').select('*').order('kategori').order('urgensi');
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var data = await apiCall('getMasterSLA', []);
     _slaData = data;
 
     var total = data.length;
@@ -132,7 +126,7 @@ async function renderMasterSLA(content) {
         html += '</div>';
         html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">';
         html += '<div style="text-align:right"><span style="color:#a5b4fc;font-size:1.1rem;font-weight:700">' + s.target_sla_jam + '</span> <span style="color:#64748b;font-size:0.7rem">jam</span></div>';
-        html += '<button onclick="deleteSLA(' + s.id + ')" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:none;padding:4px 10px;border-radius:8px;cursor:pointer;font-size:0.7rem">Hapus</button>';
+        html += '<button onclick="deleteSLA(' + idx + ')" style="background:rgba(239,68,68,0.15);color:#fca5a5;border:none;padding:4px 10px;border-radius:8px;cursor:pointer;font-size:0.7rem">Hapus</button>';
         html += '</div>';
         html += '</div>';
       });
@@ -177,19 +171,12 @@ async function saveSLAForm() {
   btn.textContent = '⏳ Menyimpan...';
 
   try {
-    var res = await supabase.from('master_sla').insert({
+    await apiCall('saveMasterSLA', [{
       kategori: kategori,
       sub_kategori: sub_kategori || '-',
       urgensi: urgensi,
       target_sla_jam: target_sla_jam
-    });
-
-    if (res.error) {
-      if (res.error.message.includes('duplicate') || res.error.message.includes('unique')) {
-        throw new Error('SLA untuk ' + kategori + ' / ' + sub_kategori + ' / ' + urgensi + ' sudah ada!');
-      }
-      throw res.error;
-    }
+    }]);
 
     showToast('SLA ' + kategori + ' (' + urgensi + ') berhasil ditambahkan!', 'success');
     if (overlay) overlay.classList.remove('show');
@@ -206,20 +193,20 @@ async function saveSLAForm() {
   }
 }
 
-async function deleteSLA(id) {
-  var item = _slaData.find(function(s) { return s.id === id; });
+async function deleteSLA(idx) {
+  var item = _slaData[idx];
   if (!item) return;
   if (!confirm('Hapus SLA: ' + item.kategori + ' / ' + (item.sub_kategori || '-') + ' / ' + item.urgensi + '?')) return;
 
-  var res = await supabase.from('master_sla').delete().eq('id', id);
-  if (res.error) {
-    showToast('Gagal hapus: ' + res.error.message, 'error');
-  } else {
+  try {
+    await apiCall('deleteMasterSLA', [item.kategori, item.sub_kategori || '', item.urgensi]);
     showToast('SLA berhasil dihapus', 'success');
     if (APP.currentPage === 'mastersla') {
       var content = document.getElementById('main-content');
       if (content) renderMasterSLA(content);
     }
+  } catch(e) {
+    showToast('Gagal hapus: ' + e.message, 'error');
   }
 }
 // ════════════════════════════════════════════════════════════
@@ -361,13 +348,12 @@ async function renderSurveyConfig(content) {
 
 async function loadKPISecData() {
   try {
-    var [patrolRes, inspeksiRes] = await Promise.all([
-      supabase.from('patrol_log').select('*').order('id', { ascending: false }).limit(100),
-      supabase.from('asset_inspection').select('*').order('id', { ascending: false }).limit(50)
+    var [patrolData, inspeksiData] = await Promise.all([
+      apiCall('getAllPatrolLogs', []),
+      apiCall('getAllAssetInspections', [])
     ]);
-    if (patrolRes.error) throw patrolRes.error;
-    var patrolData = patrolRes.data || [];
-    var inspeksiData = (inspeksiRes.error || !inspeksiRes.data) ? [] : inspeksiRes.data;
+    patrolData = (patrolData || []).slice(0, 100);
+    inspeksiData = (inspeksiData || []).slice(0, 50);
 
     var tbody = document.getElementById('tbody-kpisec');
     if (!tbody) return;

@@ -33,10 +33,8 @@ async function renderSurvey(content) {
 
   try {
     if (APP.surveyTab === 'garating') {
-      // ═══ RATING GA (from survey_ga) ═══
-      var res = await supabase.from('survey_ga').select('*').order('id', { ascending: false });
-      if (res.error) throw res.error;
-      var data = res.data || [];
+      // ═══ RATING GA (dari sheet Survey_GA via GAS) ═══
+      var data = await apiCall('getAllSurveyGA', []);
 
       // Stats
       var totalEntries = data.length;
@@ -56,8 +54,8 @@ async function renderSurvey(content) {
         teamStats[team].criteria.kualitas_kerja += s.kualitas_kerja || 0;
         teamStats[team].criteria.komunikasi += s.komunikasi || 0;
         // Monthly trend
-        if (s.created_at) {
-          var d = new Date(s.created_at);
+        if (s.timestamp) {
+          var d = new Date(String(s.timestamp).replace(' ', 'T'));
           var key = (d.getMonth()+1) + '-' + d.getFullYear();
           if (!monthlyTrend[key]) monthlyTrend[key] = { sum: 0, count: 0 };
           monthlyTrend[key].sum += r / 5;
@@ -99,12 +97,15 @@ async function renderSurvey(content) {
       }, 100);
 
     } else {
-      // ═══ RATING TIKET (from main_data.rating_survei) ═══
-      var res = await supabase.from('main_data').select('*').not('rating_survei', 'is', null).neq('rating_survei', '').order('timestamp', { ascending: false });
-      if (res.error) throw res.error;
-      var data = res.data || [];
-      var totalSelesaiRes = await supabase.from('main_data').select('*', { count: 'exact', head: true }).in('status', ['Selesai', 'Closed']);
-      var totalSelesai = totalSelesaiRes.count || 0;
+      // ═══ RATING TIKET (dari main_data.rating_survei via GAS) ═══
+      var allTickets = await apiCall('getAllComplaints', []);
+      allTickets = allTickets || [];
+      var data = allTickets.filter(function(t) {
+        return t.rating_survei !== null && t.rating_survei !== undefined && String(t.rating_survei).trim() !== '';
+      }).sort(function(a, b) {
+        return new Date(String(b.timestamp).replace(' ', 'T')) - new Date(String(a.timestamp).replace(' ', 'T'));
+      });
+      var totalSelesai = allTickets.filter(function(t) { return t.status === 'Selesai' || t.status === 'Closed'; }).length;
 
       // Stats
       var totalRated = data.length;
@@ -125,7 +126,7 @@ async function renderSurvey(content) {
         if (!tekStats[tek]) tekStats[tek] = { sum: 0, count: 0 };
         tekStats[tek].sum += r; tekStats[tek].count++;
         if (t.timestamp) {
-          var d = new Date(t.timestamp);
+          var d = new Date(String(t.timestamp).replace(' ', 'T'));
           var mk = (d.getMonth()+1) + '-' + d.getFullYear();
           if (!monthlyTrend[mk]) monthlyTrend[mk] = { sum: 0, count: 0 };
           monthlyTrend[mk].sum += r; monthlyTrend[mk].count++;
@@ -377,8 +378,8 @@ function showInboxDetail(i) {
     {label: 'Divisi', value: b.divisi},
     {label: 'No. WA', value: b.no_wa},
     {label: 'Aset', value: b.nama_aset},
-    {label: 'Mulai', value: b.waktu_mulai ? new Date(b.waktu_mulai).toLocaleString('id-ID') : '-'},
-    {label: 'Selesai', value: b.waktu_selesai ? new Date(b.waktu_selesai).toLocaleString('id-ID') : '-'},
+    {label: 'Mulai', value: b.waktu_mulai || '-'},
+    {label: 'Selesai', value: b.waktu_selesai || '-'},
     {label: 'Konsumsi', value: b.konsumsi},
     {label: 'KM Awal', value: b.km_awal || '-'},
     {label: 'KM Akhir', value: b.km_akhir || '-'},
@@ -389,9 +390,7 @@ function showInboxDetail(i) {
 async function renderInbox(content) {
   content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat pesanan...</div>';
   try {
-    var res = await supabase.from('asset_booking').select('*').order('timestamp', { ascending: false });
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var data = await apiCall('getAllBookings', []);
     _inboxData = data;
 
     // Stats

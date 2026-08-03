@@ -1,12 +1,13 @@
-# Ignore everything except frontend/
-*
-!/frontend/
-!frontend/**
-!/README.md
-!/.gitignore
-!/index.html
-!/logo_preview.html
-!/migrasi_supabase_auth.sql
-!/add_superadmin_user.sql
-!/migrasi_tabel_baru.sql
+# ── Node / tooling ─────────────────────────────────────────
 node_modules/
+*.log
+*.bak
+
+# ── Arsip Supabase — CLI & binari besar (untuk dilanjutkan nanti) ──
+# Hanya subfolder CLI/binari yang di-ignore. File .sql & backup .gs kecil
+# tetap di-commit agar tidak hilang saat clone.
+supabase-arsip/cli/
+
+# ── Frontend legacy (google.script.run — tidak dipakai) ─────
+# Versi lama yang hanya jalan saat di-serve dari GAS.
+frontend/

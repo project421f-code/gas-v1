@@ -1,0 +1,28 @@
+# ── Clasp: file yang TIDAK di-push ke Google Apps Script ────
+# ⚠️ PENTING: clasp 3.x memakai pola MICROMATCH (bukan gitignore).
+#    - Gunakan **/folder/** untuk mengecualikan seluruh isi folder
+#    - Gunakan **/*.ext untuk mengecualikan ekstensi di semua level
+#    - Pola gaya gitignore seperti "folder/" TIDAK bekerja di clasp 3.x
+
+# Backup GAS lama di arsip — JANGAN di-push
+# (berisi duplikat semua file .gs → error "Duplicate function")
+**/supabase-arsip/**
+
+# Frontend & dependencies (bukan kode GAS)
+**/frontend/**
+**/src/**
+**/node_modules/**
+**/tests/**
+**/*.html
+
+# Dokumen & tooling
+**/*.md
+**/*.sql
+**/*.py
+**/*.json
+!appsscript.json
+**/*.log
+**/.git/**
+
+# Token WhatsApp hardcoded — set via menu Pengaturan aplikasi saja
+**/_setup_wa_token.gs

@@ -21,56 +21,9 @@ async function loadPublicAvailability() {
   content.innerHTML = '<div class="pub-loading" style="text-align:center;padding:40px;color:#64748b">&#x1F504; Memuat daftar aset...</div>';
 
   try {
-    // Fetch all assets
-    var assetsRes = await supabase.from('asset_list').select('*');
-    if (assetsRes.error) throw assetsRes.error;
-    var allAssets = assetsRes.data || [];
-
-    // Fetch bookings for the selected date
-    var dateStart = tanggal + 'T00:00:00';
-    var dateEnd = tanggal + 'T23:59:59';
-    var bookingRes = await supabase
-      .from('asset_booking')
-      .select('*')
-      .gte('tanggal_mulai', dateStart)
-      .lte('tanggal_mulai', dateEnd)
-      .neq('status_booking', 'Ditolak')
-      .neq('status_booking', 'Batal');
-
-    if (bookingRes.error) throw bookingRes.error;
-    var bookings = bookingRes.data || [];
-
-    // Build availability data
-    var totalAset = allAssets.length;
-    var bookedAssetNames = {};
-    bookings.forEach(function(b) {
-      bookedAssetNames[b.nama_aset] = true;
-    });
-
-    var daftarAset = allAssets.map(function(a) {
-      var isAvail = !bookedAssetNames[a.nama_aset] && a.status_operasional === 'Tersedia';
-      var assetBookings = bookings.filter(function(b) { return b.nama_aset === a.nama_aset; });
-      return {
-        nama_aset: a.nama_aset,
-        kategori: a.kategori,
-        detail_kapasitas: a.detail_kapasitas,
-        available: isAvail,
-        slots: assetBookings.map(function(b) {
-          return {
-            waktu_mulai: b.tanggal_mulai ? new Date(b.tanggal_mulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-            waktu_selesai: b.tanggal_selesai ? new Date(b.tanggal_selesai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-            peminjam: b.nama_peminjam || '-'
-          };
-        })
-      };
-    });
-
-    renderPublicAssetGrid({
-      total_aset: totalAset,
-      total_tersedia: daftarAset.filter(function(a) { return a.available; }).length,
-      daftar_aset: daftarAset
-    });
-
+    // Ketersediaan aset dihitung di backend GAS (aksi publik, tanpa login)
+    var data = await apiCall('getPublicAssetsAvailability', [tanggal]);
+    renderPublicAssetGrid(data);
   } catch(e) {
     if (content) content.innerHTML = '<div class="pub-error" style="text-align:center;padding:40px;color:#f87171">&#x274C; Gagal memuat: ' + escapeHtml(e.message) + '</div>';
     console.error(e);
@@ -181,38 +134,20 @@ async function submitPubBooking(namaAset) {
   btn.innerHTML = '⏳ Memproses...';
 
   try {
-    // Check for conflicts
-    var conflictRes = await supabase
-      .from('asset_booking')
-      .select('*')
-      .eq('nama_aset', namaAset)
-      .gte('tanggal_mulai', new Date(start).toISOString())
-      .lte('tanggal_mulai', new Date(end).toISOString())
-      .neq('status_booking', 'Ditolak')
-      .neq('status_booking', 'Batal');
-
-    if (conflictRes.data && conflictRes.data.length > 0) {
-      btn.disabled = false;
-      btn.innerHTML = '📅 Konfirmasi Booking';
-      showPubError('Maaf, aset sudah dibooking di jam tersebut.');
-      return;
-    }
-
-    // Insert booking
-    var res = await supabase.from('asset_booking').insert({
+    // Booking via backend GAS — otomatis cek bentrok + kirim notifikasi WA
+    var data = await apiCall('publicBooking', [{
       nama_peminjam: nama,
       no_wa: wa,
       nama_aset: namaAset,
-      tanggal_mulai: new Date(start).toISOString(),
-      tanggal_selesai: new Date(end).toISOString(),
-      status_booking: 'Pending',
-      timestamp: new Date().toISOString()
-    });
+      waktu_mulai: new Date(start).toISOString(),
+      waktu_selesai: new Date(end).toISOString(),
+      konsumsi: 'Tidak'
+    }]);
 
-    if (res.error) {
+    if (data && data.rejected) {
       btn.disabled = false;
       btn.innerHTML = '📅 Konfirmasi Booking';
-      showPubError(res.error.message);
+      showPubError('Maaf, jadwal sudah dibooking orang lain.');
       return;
     }
 

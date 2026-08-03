@@ -55,14 +55,12 @@ async function renderPatrol(content) {
       content.innerHTML = html;
       loadKPISecData();
     } else {
-      var [logRes, cpRes] = await Promise.all([
-        supabase.from('patrol_log').select('*').order('timestamp', { ascending: false }),
-        supabase.from('master_patrol_checkpoints').select('*').order('id')
+      var [logs, checkpoints] = await Promise.all([
+        apiCall('getAllPatrolLogs', []),
+        apiCall('getAllPatrolCheckpoints', [])
       ]);
-      if (logRes.error) throw logRes.error;
-      if (cpRes.error) throw cpRes.error;
-      var logs = logRes.data || [];
-      var checkpoints = cpRes.data || [];
+      logs = logs || [];
+      checkpoints = checkpoints || [];
       _patrolLogData = logs;
       _patrolCPData = checkpoints;
       var totalPatrol = logs.length;
@@ -170,18 +168,14 @@ function showHKDetailGC(i) {
 async function renderHousekeeping(content) {
   content.innerHTML = renderSkeleton('stats');
   try {
-    var [csRes, auditRes, gcRes] = await Promise.all([
-      supabase.from('cs_daily_checklist').select('*').order('created_at', { ascending: false }),
-      supabase.from('audit_housekeeping').select('*').order('created_at', { ascending: false }),
-      supabase.from('gc_execution').select('*').order('id', { ascending: false })
+    var [csData, auditData, gcData] = await Promise.all([
+      apiCall('getAllDailyChecklists', []),
+      apiCall('getAllAudits', []),
+      apiCall('getAllGCExecutions', [])
     ]);
-    if (csRes.error) throw csRes.error;
-    if (auditRes.error) throw auditRes.error;
-    if (gcRes.error) throw gcRes.error;
-
-    var csData = csRes.data || [];
-    var auditData = auditRes.data || [];
-    var gcData = gcRes.data || [];
+    csData = csData || [];
+    auditData = auditData || [];
+    gcData = gcData || [];
     _hkCSData = csData;
     _hkAuditData = auditData;
     _hkGCData = gcData;
@@ -240,14 +234,14 @@ async function renderHKContent() {
   if (!container) return;
   container.innerHTML = '<div style="color:#64748b;text-align:center;padding:20px">Memuat...</div>';
   try {
-    var [csRes, auditRes, gcRes] = await Promise.all([
-      supabase.from('cs_daily_checklist').select('*').order('created_at', { ascending: false }),
-      supabase.from('audit_housekeeping').select('*').order('created_at', { ascending: false }),
-      supabase.from('gc_execution').select('*').order('id', { ascending: false })
+    var [csList, auditList, gcList] = await Promise.all([
+      apiCall('getAllDailyChecklists', []),
+      apiCall('getAllAudits', []),
+      apiCall('getAllGCExecutions', [])
     ]);
-    _hkCSData = csRes.data || [];
-    _hkAuditData = auditRes.data || [];
-    _hkGCData = gcRes.data || [];
+    _hkCSData = csList || [];
+    _hkAuditData = auditList || [];
+    _hkGCData = gcList || [];
     container.innerHTML = renderHKTabContent(APP_HK_TAB, _hkCSData, _hkAuditData, _hkGCData);
   } catch(e) {
     container.innerHTML = '<div style="color:#f87171;text-align:center;padding:20px">Gagal memuat: ' + e.message + '</div>';
@@ -288,9 +282,7 @@ async function recalcKPIHK() {
   var btn = document.querySelector('[onclick="recalcKPIHK()"]');
   if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Menghitung...'; }
   try {
-    var res = await supabase.from('cs_daily_checklist').select('*');
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var data = await apiCall('getAllDailyChecklists', []);
     var grouped = {};
     data.forEach(function(c) {
       var name = c.nama_staf || 'Unknown';

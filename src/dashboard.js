@@ -2,20 +2,13 @@ async function renderDashboard(content) {
   content.innerHTML = renderSkeleton('dashboard');
 
   try {
-    // Fetch stats in parallel
-    var [assetsRes, bookingsRes, usersRes, kosRes, mainDataRes] = await Promise.all([
-      supabase.from('asset_list').select('*', { count: 'exact', head: true }),
-      supabase.from('asset_booking').select('*', { count: 'exact', head: true }).eq('status_booking', 'Pending'),
-      supabase.from('user_list').select('*', { count: 'exact', head: true }),
-      supabase.from('master_kos').select('*', { count: 'exact', head: true }),
-      supabase.from('main_data').select('*', { count: 'exact', head: true }).eq('status', 'Open')
-    ]);
-
-    var totalAset = assetsRes.count || 0;
-    var pendingBooking = bookingsRes.count || 0;
-    var totalUser = usersRes.count || 0;
-    var totalKos = kosRes.count || 0;
-    var openMaintenance = mainDataRes.count || 0;
+    // Fetch stats dari backend GAS + Spreadsheet
+    var stats = await apiCall('getDashboardStats', []);
+    var totalAset = (stats.assets && stats.assets.total) || 0;
+    var pendingBooking = (stats.booking && stats.booking.pending) || 0;
+    var totalUser = (stats.users && stats.users.total) || 0;
+    var totalKos = (stats.kos && stats.kos.total) || 0;
+    var openMaintenance = (stats.maintenance && stats.maintenance.open) || 0;
 
     content.innerHTML = renderDashboardHTML(totalAset, pendingBooking, totalUser, totalKos, openMaintenance);
 
@@ -91,10 +84,8 @@ async function loadRecentBookings() {
   if (!el) return;
 
   try {
-    var res = await supabase.from('asset_booking').select('*').order('id', { ascending: false }).limit(5);
-    if (res.error) throw res.error;
-
-    var data = res.data || [];
+    var data = await apiCall('getAllBookings', []);
+    data = (data || []).slice(0, 5);
     if (data.length === 0) {
       el.innerHTML = '<div style="color:#475569;font-size:0.78rem">Belum ada booking</div>';
       return;
@@ -145,9 +136,7 @@ async function renderAssets(content) {
 
   try {
     if (_assetsTab === 'inspection') {
-      var res = await supabase.from('asset_inspection').select('*').order('id', { ascending: false });
-      if (res.error) throw res.error;
-      _inspectionData = res.data || [];
+      _inspectionData = await apiCall('getAllAssetInspections', []);
 
       html += '<div style="display:flex;gap:6px;margin-bottom:14px">';
       html += '<button onclick="showInspeksiForm()" style="background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border:none;padding:6px 16px;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:600">&#x2795; Tambah Inspeksi</button>';
@@ -177,9 +166,7 @@ async function renderAssets(content) {
       html += '</tbody></table></div></div>';
       content.innerHTML = html;
     } else {
-      var res = await supabase.from('asset_list').select('*').order('id');
-      if (res.error) throw res.error;
-      var data = res.data || [];
+      var data = await apiCall('getAllAssetList', []);
       html += '<div class="stats-grid">';
       var tersedia = data.filter(function(a) { return a.status_operasional === 'Tersedia'; }).length;
       var dipakai = data.filter(function(a) { return a.status_operasional !== 'Tersedia'; }).length;
@@ -223,8 +210,7 @@ async function saveInspeksi() {
   };
   if (!payload.no_polisi || !payload.bulan_tahun) { showToast('No. Polisi dan Bulan wajib diisi', 'error'); return; }
   try {
-    var res = await supabase.from('asset_inspection').insert(payload);
-    if (res.error) throw res.error;
+    await apiCall('saveAssetInspection', [payload]);
     showToast('Inspeksi berhasil disimpan!', 'success');
     hideFormModal();
     if (APP.currentPage === 'assets' && _assetsTab === 'inspection') renderAssets(document.getElementById('main-content'));
@@ -234,8 +220,9 @@ async function saveInspeksi() {
 async function delInspeksi(i) {
   var d = _inspectionData[i];
   if (!d || !confirm('Hapus inspeksi ' + d.no_polisi + '?')) return;
-  var res = await supabase.from('asset_inspection').delete().eq('id', d.id);
-  if (res.error) { showToast('Gagal: ' + res.error.message, 'error'); return; }
+  try {
+    await apiCall('deleteAssetInspection', [d._rowIndex]);
+  } catch(e) { showToast('Gagal: ' + e.message, 'error'); return; }
   showToast('Inspeksi berhasil dihapus', 'success');
   if (APP.currentPage === 'assets' && _assetsTab === 'inspection') renderAssets(document.getElementById('main-content'));
 }

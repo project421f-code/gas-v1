@@ -1,14 +1,12 @@
 async function generateUserId() {
-  // Query max user_id to avoid duplicates
   try {
-    var res = await supabase.from('user_list').select('user_id').order('id', { ascending: false }).limit(1);
-    if (res.data && res.data.length > 0) {
-      var lastId = res.data[0].user_id || '';
-      var num = parseInt(lastId.replace('USR-', ''), 10) || 0;
-      _userIdCounter = num + 1;
-    } else {
-      _userIdCounter++;
-    }
+    var data = await apiCall('getAllUsers', []);
+    var maxNum = 0;
+    (data || []).forEach(function(u) {
+      var m = String(u.user_id || '').match(/USR-(\d+)/);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    _userIdCounter = maxNum + 1;
   } catch(e) {
     _userIdCounter++;
   }
@@ -18,9 +16,7 @@ async function generateUserId() {
 async function renderUsers(content) {
   content.innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Memuat data user...</div>';
   try {
-    var res = await supabase.from('user_list').select('*').order('id');
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var data = await apiCall('getAllUsers', []);
     _usersData = data;
 
     var total = data.length;
@@ -102,7 +98,7 @@ function showUserForm(idx) {
 
   if (idx !== undefined && _usersData[idx]) {
     var u = _usersData[idx];
-    _editingUserId = u.id;
+    _editingUserId = u.user_id;
     document.getElementById('user-form-title').textContent = 'Edit User: ' + u.nama;
     document.getElementById('user-id-display').textContent = u.user_id;
     document.getElementById('user-form-id').value = u.user_id;
@@ -140,45 +136,40 @@ async function saveUserForm() {
   btn.textContent = '⏳ Menyimpan...';
 
   try {
+    var password = document.getElementById('user-form-password').value;
+
     if (_editingUserId) {
       // UPDATE
-      var res = await supabase.from('user_list').update({
+      var payload = {
+        user_id: _editingUserId,
         nama: nama,
         email: email,
         no_wa: no_wa,
         tim: tim,
-        role: role,
-        updated_at: new Date().toISOString()
-      }).eq('id', _editingUserId);
-
-      if (res.error) throw res.error;
-
+        role: role
+      };
+      if (password) payload.password = password;
+      await apiCall('saveUser', [payload]);
       showToast('User ' + nama + ' berhasil diupdate!', 'success');
     } else {
-      // INSERT — tanpa password (auth dibuat manual di Supabase dashboard)
-      var res = await supabase.from('user_list').insert({
+      // INSERT — password wajib (dipakai untuk login)
+      if (!password) {
+        showToast('Password wajib diisi untuk user baru.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Simpan';
+        return;
+      }
+      await apiCall('saveUser', [{
         user_id: user_id,
         nama: nama,
         email: email,
         no_wa: no_wa,
         tim: tim,
         role: role,
+        password: password,
         status: 'Aktif'
-      });
-
-      if (res.error) {
-        if (res.error.message.includes('duplicate') || res.error.message.includes('unique')) {
-          showToast('Email ' + email + ' sudah terdaftar!', 'error');
-        } else {
-          throw res.error;
-        }
-        btn.disabled = false;
-        btn.textContent = 'Simpan';
-        return;
-      }
-
+      }]);
       showToast('User ' + nama + ' berhasil ditambahkan!', 'success');
-      showToast('📝 Buat akun auth di Supabase Dashboard agar bisa login.', 'success');
     }
 
     // Success: close modal and refresh if still on users page
@@ -203,17 +194,13 @@ async function toggleUserStatus(idx) {
   var konfirmasi = confirm('Ubah status ' + u.nama + ' menjadi ' + newStatus + '?');
   if (!konfirmasi) return;
 
-  var res = await supabase.from('user_list').update({
-    status: newStatus,
-    updated_at: new Date().toISOString()
-  }).eq('id', u.id);
-
-  if (res.error) {
-    showToast('Gagal: ' + res.error.message, 'error');
-  } else {
+  try {
+    await apiCall('toggleUserStatus', [u.user_id]);
     showToast('Status ' + u.nama + ' menjadi ' + newStatus, 'success');
     var content = document.getElementById('main-content');
     if (content) renderUsers(content);
+  } catch(e) {
+    showToast('Gagal: ' + e.message, 'error');
   }
 }
 
@@ -221,17 +208,16 @@ async function deleteUser(idx) {
   var u = _usersData[idx];
   if (!u) return;
 
-  var konfirmasi = confirm('Hapus user ' + u.nama + ' (' + u.email + ')?\n\n⚠️ Tindakan ini tidak bisa dibatalkan!\nUser ini tetap bisa login jika masih terdaftar di Supabase Auth.');
+  var konfirmasi = confirm('Hapus user ' + u.nama + ' (' + u.email + ')?\n\n⚠️ Tindakan ini tidak bisa dibatalkan!');
   if (!konfirmasi) return;
 
-  var res = await supabase.from('user_list').delete().eq('id', u.id);
-
-  if (res.error) {
-    showToast('Gagal hapus: ' + res.error.message, 'error');
-  } else {
+  try {
+    await apiCall('deleteUser', [u.user_id]);
     showToast('User ' + u.nama + ' berhasil dihapus', 'success');
     var content = document.getElementById('main-content');
     if (content) renderUsers(content);
+  } catch(e) {
+    showToast('Gagal hapus: ' + e.message, 'error');
   }
 }
 // ════════════════════════════════════════════════════════════
@@ -239,24 +225,24 @@ async function deleteUser(idx) {
 // ════════════════════════════════════════════════════════════
 
 var _settings = {
-  waToken: localStorage.getItem('ga_wa_token') || '',
-  functionUrl: localStorage.getItem('ga_function_url') || 'https://ytoopikqfmiomgfzhoem.supabase.co/functions/v1/wa-notifications',
+  gaUrl: localStorage.getItem('ga_app_url') || '',
+  waToken: ''
 };
 
 function saveSettings() {
-  localStorage.setItem('ga_wa_token', _settings.waToken);
-  localStorage.setItem('ga_function_url', _settings.functionUrl);
+  localStorage.setItem('ga_app_url', _settings.gaUrl);
 }
 
 function renderSettings(content) {
   var html = '<div class="page-header"><div class="page-title">Pengaturan</div><div class="page-desc">Konfigurasi sistem & integrasi WhatsApp</div></div>';
 
-  // Edge Function URL
+  // Koneksi Backend GAS
   html += '<div class="section-card">';
-  html += '<div class="section-title">&#x1F4E1; Koneksi Backend</div>';
+  html += '<div class="section-title">&#x1F4E1; Koneksi Backend (Google Apps Script)</div>';
   html += '<div class="login-form-group">';
-  html += '<label class="login-label">Edge Function URL</label>';
-  html += '<input type="text" class="login-input" id="setting-func-url" value="' + escapeHtml(_settings.functionUrl) + '" placeholder="https://project.supabase.co/functions/v1/wa-notifications">';
+  html += '<label class="login-label">URL Web App GAS</label>';
+  html += '<input type="text" class="login-input" id="setting-ga-url" value="' + escapeHtml(_settings.gaUrl) + '" placeholder="https://script.google.com/macros/s/XXXX/exec">';
+  html += '<div style="color:#475569;font-size:0.72rem;margin-top:6px">Deploy project GAS sebagai Web App (akses: Siapa saja) lalu salin URL-nya ke sini. Disimpan di browser Anda.</div>';
   html += '</div>';
   html += '</div>';
 
@@ -266,7 +252,7 @@ function renderSettings(content) {
   html += '<div class="login-form-group">';
   html += '<label class="login-label">Fonnte API Token</label>';
   html += '<input type="password" class="login-input" id="setting-wa-token" value="' + escapeHtml(_settings.waToken) + '" placeholder="Masukkan token Fonnte Anda...">';
-  html += '<div style="color:#475569;font-size:0.72rem;margin-top:6px">Dapatkan token dari <a href="https://fonnte.com" target="_blank" style="color:#a5b4fc">fonnte.com</a> &mdash; WA Gateway yang digunakan sistem</div>';
+  html += '<div style="color:#475569;font-size:0.72rem;margin-top:6px">Dapatkan token dari <a href="https://fonnte.com" target="_blank" style="color:#a5b4fc">fonnte.com</a> &mdash; disimpan aman di server (PropertiesService)</div>';
   html += '</div>';
   html += '<button class="login-btn login-btn-primary" id="btn-test-wa" onclick="testWAConnection()" style="margin-top:4px">&#x1F50C; Test Koneksi WA</button>';
   html += '<div id="wa-test-result" style="margin-top:10px;font-size:0.82rem;color:#64748b"></div>';
@@ -291,8 +277,8 @@ function renderSettings(content) {
   html += '<div class="section-card">';
   html += '<div class="section-title">&#x2139; Informasi</div>';
   html += '<div style="color:#94a3b8;font-size:0.82rem;line-height:1.7">';
-  html += '<p><strong>Webhook URL untuk Fonnte:</strong></p>';
-  html += '<code style="display:block;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;margin:8px 0;font-size:0.78rem;word-break:break-all;color:#a5b4fc">' + escapeHtml(_settings.functionUrl) + '/webhook</code>';
+  html += '<p><strong>Webhook URL untuk Fonnte (pesan masuk → tiket komplain):</strong></p>';
+  html += '<code style="display:block;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;margin:8px 0;font-size:0.78rem;word-break:break-all;color:#a5b4fc">' + escapeHtml(getGasUrl()) + '</code>';
   html += '<p style="margin-top:12px">Konfigurasi webhook ini di dashboard Fonnte agar pesan masuk otomatis menjadi tiket komplain.</p>';
   html += '<p style="margin-top:8px">&#x1F517; <a href="https://fonnte.com" target="_blank" style="color:#a5b4fc">Buka Fonnte Dashboard</a></p>';
   html += '</div>';
@@ -302,28 +288,37 @@ function renderSettings(content) {
   html += '<button class="login-btn login-btn-primary" onclick="saveSettingsForm()" style="margin-bottom:24px">&#x1F4BE; Simpan Pengaturan</button>';
 
   content.innerHTML = html;
+
+  // Muat token WA dari server
+  apiCall('getSettings', [])
+    .then(function(s) {
+      _settings.waToken = (s && s.WA_API_TOKEN) ? s.WA_API_TOKEN : '';
+      var el = document.getElementById('setting-wa-token');
+      if (el) el.value = _settings.waToken;
+    })
+    .catch(function() { /* token opsional */ });
 }
 
 function saveSettingsForm() {
-  _settings.functionUrl = document.getElementById('setting-func-url').value.trim();
-  _settings.waToken = document.getElementById('setting-wa-token').value.trim();
+  _settings.gaUrl = document.getElementById('setting-ga-url').value.trim();
   saveSettings();
-  showToast('Pengaturan berhasil disimpan!', 'success');
+  var token = document.getElementById('setting-wa-token').value.trim();
+  apiCall('saveSettings', [{ WA_API_TOKEN: token }])
+    .then(function() { showToast('Pengaturan berhasil disimpan!', 'success'); })
+    .catch(function(e) { showToast('Gagal simpan pengaturan: ' + e.message, 'error'); });
 }
 
 async function testWAConnection() {
   var btn = document.getElementById('btn-test-wa');
   var resultEl = document.getElementById('wa-test-result');
 
-  _settings.functionUrl = document.getElementById('setting-func-url').value.trim();
-  _settings.waToken = document.getElementById('setting-wa-token').value.trim();
-  saveSettings();
-
-  if (!_settings.functionUrl) {
-    resultEl.innerHTML = '❌ Edge Function URL belum diisi.';
+  var token = document.getElementById('setting-wa-token').value.trim();
+  if (!token) {
+    resultEl.innerHTML = '❌ Token WA belum diisi.';
     resultEl.style.color = '#f87171';
     return;
   }
+  try { await apiCall('saveSettings', [{ WA_API_TOKEN: token }]); } catch(e) { /* lanjut */ }
 
   btn.disabled = true;
   btn.textContent = '⏳ Testing...';
@@ -331,26 +326,13 @@ async function testWAConnection() {
   resultEl.style.color = '#94a3b8';
 
   try {
-    var url = _settings.functionUrl.replace(/\/$/, '') + '/test';
-    var res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-wa-token': _settings.waToken,
-      },
-    });
-    var data = await res.json();
-
-    if (data.valid) {
-      resultEl.innerHTML = '✅ ' + (data.detail || 'Koneksi berhasil!');
-      resultEl.style.color = '#34d399';
-      showToast('Koneksi WA berhasil!', 'success');
-    } else {
-      resultEl.innerHTML = '❌ ' + (data.detail || 'Token tidak valid');
-      resultEl.style.color = '#f87171';
-    }
+    var phone = document.getElementById('setting-test-phone').value.trim();
+    var data = await apiCall('testWhatsAppConnection', [phone || null]);
+    resultEl.innerHTML = '✅ ' + (data.message || 'Koneksi WA berhasil!');
+    resultEl.style.color = '#34d399';
+    showToast('Koneksi WA berhasil!', 'success');
   } catch (e) {
-    resultEl.innerHTML = '❌ Gagal terhubung: ' + e.message;
+    resultEl.innerHTML = '❌ ' + e.message;
     resultEl.style.color = '#f87171';
   } finally {
     btn.disabled = false;
@@ -370,43 +352,18 @@ async function sendTestWA() {
     return;
   }
 
-  _settings.functionUrl = document.getElementById('setting-func-url').value.trim();
-  _settings.waToken = document.getElementById('setting-wa-token').value.trim();
-  saveSettings();
-
-  if (!_settings.functionUrl) {
-    resultEl.innerHTML = '❌ Edge Function URL belum diisi.';
-    resultEl.style.color = '#f87171';
-    return;
-  }
-
   btn.disabled = true;
   btn.textContent = '⏳ Mengirim...';
   resultEl.innerHTML = '⏳ Mengirim pesan...';
   resultEl.style.color = '#94a3b8';
 
   try {
-    var url = _settings.functionUrl.replace(/\/$/, '') + '/send';
-    var res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-wa-token': _settings.waToken,
-      },
-      body: JSON.stringify({ phone: phone, message: message }),
-    });
-    var data = await res.json();
-
-    if (data.success) {
-      resultEl.innerHTML = '✅ Pesan berhasil dikirim!';
-      resultEl.style.color = '#34d399';
-      showToast('Pesan WA berhasil dikirim!', 'success');
-    } else {
-      resultEl.innerHTML = '❌ ' + (data.error || 'Gagal mengirim');
-      resultEl.style.color = '#f87171';
-    }
+    await apiCall('sendWaMessage', [phone, message]);
+    resultEl.innerHTML = '✅ Pesan berhasil dikirim!';
+    resultEl.style.color = '#34d399';
+    showToast('Pesan WA berhasil dikirim!', 'success');
   } catch (e) {
-    resultEl.innerHTML = '❌ Gagal: ' + e.message;
+    resultEl.innerHTML = '❌ ' + e.message;
     resultEl.style.color = '#f87171';
   } finally {
     btn.disabled = false;

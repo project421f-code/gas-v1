@@ -2,9 +2,7 @@ async function loadKPISecData() {
   var tbody = document.getElementById('tbody-kpisec');
   if (!tbody) return;
   try {
-    var res = await supabase.from('kpi_security').select('*').order('persen_kepatuhan_patroli', { ascending: false });
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var data = await apiCall('getSecurityKPI', []);
     if (data.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#475569">Belum ada data KPI. Klik \"Kalkulasi Ulang\".</td></tr>';
       return;
@@ -31,36 +29,8 @@ async function recalcKPISec() {
   var btn = document.querySelector('[onclick="recalcKPISec()"]');
   if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Menghitung...'; }
   try {
-    var res = await supabase.from('patrol_log').select('*');
-    if (res.error) throw res.error;
-    var logs = res.data || [];
-    var grouped = {};
-    logs.forEach(function(l) {
-      var name = l.nama_personel || 'Unknown';
-      if (!grouped[name]) grouped[name] = { total: 0, aman: 0, inspeksi: 0 };
-      grouped[name].total++;
-      if (l.kondisi_area === 'Aman') grouped[name].aman++;
-      if (l.catatan_temuan && l.catatan_temuan.trim()) grouped[name].inspeksi++;
-    });
-    await supabase.from('kpi_security').delete().neq('id', 0);
-    var inserts = [];
-    Object.keys(grouped).forEach(function(name) {
-      var g = grouped[name];
-      var kepatuhan = g.total > 0 ? ((g.aman / g.total) * 100).toFixed(1) : 0;
-      var skor = parseFloat(kepatuhan) >= 80 ? 'Baik' : (parseFloat(kepatuhan) >= 50 ? 'Cukup' : 'Kurang');
-      inserts.push({
-        nama_anggota: name,
-        shift_dominan: '',
-        persen_kepatuhan_patroli: parseFloat(kepatuhan),
-        inspeksi_selesai: g.inspeksi,
-        insiden_keamanan: 0,
-        skor_performa: skor
-      });
-    });
-    if (inserts.length > 0) {
-      var insRes = await supabase.from('kpi_security').insert(inserts);
-      if (insRes.error) throw insRes.error;
-    }
+    // Kalkulasi + simpan KPI Security dilakukan di backend GAS
+    await apiCall('calculateSecurityKPI', []);
     showToast('KPI Security berhasil dikalkulasi!', 'success');
     if (APP.currentPage === 'patrol' && _patrolTab === 'kpisec') renderPatrol(document.getElementById('main-content'));
   } catch(e) { showToast('Gagal: ' + e.message, 'error'); }
@@ -103,58 +73,8 @@ async function recalcKPIMnt() {
   if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Menghitung...'; }
 
   try {
-    // Get all tickets grouped by teknisi
-    var res = await supabase.from('main_data').select('*');
-    if (res.error) throw res.error;
-    var allTickets = res.data || [];
-
-    // Group by teknisi
-    var grouped = {};
-    allTickets.forEach(function(t) {
-      var teknisi = t.teknisi || 'Unassigned';
-      if (!grouped[teknisi]) {
-        grouped[teknisi] = { total: 0, selesai: 0, ratings: [] };
-      }
-      grouped[teknisi].total++;
-      if (t.status === 'Selesai' || t.status === 'Closed') {
-        grouped[teknisi].selesai++;
-      }
-      if (t.rating_survei) {
-        grouped[teknisi].ratings.push(Number(t.rating_survei));
-      }
-    });
-
-    // Delete old KPI data
-    await supabase.from('dashboard_kpi_mnt').delete().neq('id', 0);
-
-    // Insert new KPI data
-    var inserts = [];
-    Object.keys(grouped).forEach(function(name) {
-      if (name === 'Unassigned') return;
-      var g = grouped[name];
-      var persenSla = g.total > 0 ? ((g.selesai / g.total) * 100).toFixed(1) : 0;
-      var avgRating = g.ratings.length > 0
-        ? (g.ratings.reduce(function(a, b) { return a + b; }, 0) / g.ratings.length).toFixed(1)
-        : 0;
-      var skor = 'Baik';
-      if (persenSla < 50) skor = 'Perlu Perbaikan';
-      else if (persenSla < 80) skor = 'Cukup';
-
-      inserts.push({
-        nama_staff: name,
-        total_tiket: g.total,
-        tiket_selesai: g.selesai,
-        persen_sla: parseFloat(persenSla),
-        rata_rata_rating: parseFloat(avgRating),
-        skor_performa: skor
-      });
-    });
-
-    if (inserts.length > 0) {
-      var insRes = await supabase.from('dashboard_kpi_mnt').insert(inserts);
-      if (insRes.error) throw insRes.error;
-    }
-
+    // Kalkulasi + simpan KPI Maintenance dilakukan di backend GAS
+    await apiCall('calculateMaintenanceKPI', []);
     showToast('KPI Maintenance berhasil dikalkulasi ulang!', 'success');
     if (APP.currentPage === 'maintenance') {
       var content = document.getElementById('main-content');
@@ -210,9 +130,7 @@ async function renderMaintenance(content) {
       html += '<button onclick="recalcKPIMnt()" style="background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;border:none;padding:6px 16px;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:600">&#x1F504; Kalkulasi Ulang</button>';
       html += '</div>';
 
-      var kpiRes = await supabase.from('dashboard_kpi_mnt').select('*').order('persen_sla', { ascending: false });
-      if (kpiRes.error) throw kpiRes.error;
-      var kpiData = kpiRes.data || [];
+      var kpiData = await apiCall('getMaintenanceKPI', []);
 
       html += '<div class="section-card">';
       if (kpiData.length === 0) {
@@ -242,18 +160,12 @@ async function renderMaintenance(content) {
     }
 
     // Tickets tab
-    var query = supabase.from('main_data').select('*').order('timestamp', { ascending: false });
-    if (_mntFilter !== 'All') {
-      query = query.eq('status', _mntFilter);
-    }
-    var res = await query;
-    if (res.error) throw res.error;
-    var data = res.data || [];
+    var filters = _mntFilter !== 'All' ? { status: _mntFilter } : null;
+    var data = await apiCall('getAllComplaints', [filters]);
     _mntData = data;
 
     // Stats dari TOTAL data (unfiltered)
-    var resAll = await supabase.from('main_data').select('*');
-    var allData = resAll.data || [];
+    var allData = await apiCall('getAllComplaints', []);
     var total = allData.length;
     var open = allData.filter(function(m) { return m.status === 'Open'; }).length;
     var inProgress = allData.filter(function(m) { return m.status === 'In Progress'; }).length;
@@ -410,8 +322,9 @@ async function saveComplaintForm() {
 
   try {
     if (tiketId) {
-      // UPDATE existing
-      var res = await supabase.from('main_data').update({
+      // UPDATE existing — saveComplaint menangani update via tiket_id
+      await apiCall('saveComplaint', [{
+        tiket_id: tiketId,
         nama_customer: nama,
         no_wa: wa,
         lokasi: lokasi,
@@ -420,14 +333,11 @@ async function saveComplaintForm() {
         urgensi: urgensi,
         deskripsi: deskripsi,
         foto_kerusakan: foto
-      }).eq('tiket_id', tiketId);
-      if (res.error) throw res.error;
+      }]);
       showToast('Tiket ' + tiketId + ' berhasil diupdate!', 'success');
     } else {
-      // INSERT new ticket
-      var newId = 'TKT-' + String(Date.now()).slice(-6);
-      var res = await supabase.from('main_data').insert({
-        tiket_id: newId,
+      // INSERT — tiket_id digenerate otomatis di backend (MNT-YYYY-NNNN)
+      await apiCall('saveComplaint', [{
         nama_customer: nama,
         no_wa: wa,
         lokasi: lokasi,
@@ -435,12 +345,9 @@ async function saveComplaintForm() {
         sub_kategori: subkat,
         urgensi: urgensi,
         deskripsi: deskripsi,
-        foto_kerusakan: foto,
-        status: 'Open',
-        timestamp: new Date().toISOString()
-      });
-      if (res.error) throw res.error;
-      showToast('Tiket ' + newId + ' berhasil dibuat!', 'success');
+        foto_kerusakan: foto
+      }]);
+      showToast('Tiket baru berhasil dibuat!', 'success');
     }
 
     if (overlay) overlay.classList.remove('show');
@@ -502,13 +409,11 @@ async function doUpdateStatus() {
   btn.textContent = '\u23F3 Mengupdate...';
 
   try {
-    var updateData = { status: newStatus, teknisi: teknisi };
-    if (catatan) updateData.catatan = catatan;
-    if (foto) updateData.foto_perbaikan = foto;
-    if (newStatus === 'Selesai') updateData.tanggal_selesai = new Date().toISOString();
-
-    var res = await supabase.from('main_data').update(updateData).eq('tiket_id', tiketId);
-    if (res.error) throw res.error;
+    var assignData = { teknisi: teknisi };
+    if (catatan) assignData.catatan = catatan;
+    if (foto) assignData.foto_perbaikan = foto;
+    // updateComplaintStatus juga menghitung durasi, status SLA, & kirim notifikasi WA
+    await apiCall('updateComplaintStatus', [tiketId, newStatus, assignData]);
 
     showToast('Tiket ' + tiketId + ' \u2192 ' + newStatus, 'success');
     if (overlay) overlay.classList.remove('show');
@@ -533,44 +438,14 @@ var _cameraStreamStatus = null;
 // ════════════════════════════════════════════════════════════
 // SHARED — Base64 to Blob & Upload to Supabase Storage
 // ════════════════════════════════════════════════════════════
-var STORAGE_BUCKET = 'foto-tiket';
-
-function base64ToBlob(dataUrl) {
-  var arr = dataUrl.split(',');
-  var mime = arr[0].match(/:(.*?);/)[1];
-  var bstr = atob(arr[1]);
-  var n = bstr.length;
-  var u8arr = new Uint8Array(n);
-  while (n--) { u8arr[n] = bstr.charCodeAt(n); }
-  return new Blob([u8arr], { type: mime });
-}
-
-async function uploadPhotoToSupabase(dataUrl, folder) {
+async function uploadPhoto(dataUrl, folder) {
   try {
-    var blob = base64ToBlob(dataUrl);
     var fileName = Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
-    var filePath = folder + '/' + fileName;
-
-    var uploadRes = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(filePath, blob, {
-        contentType: 'image/jpeg',
-        upsert: false
-      });
-
-    if (uploadRes.error) {
-      console.warn('Upload to Supabase Storage failed:', uploadRes.error.message);
-      if (uploadRes.error.message && uploadRes.error.message.includes('bucket')) {
-        showToast('Bucket \'' + STORAGE_BUCKET + '\' belum dibuat. Buat di Supabase Dashboard > Storage, lalu set Public.', 'warning');
-      }
-      return null;
-    }
-
-    var publicUrlRes = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(filePath);
-
-    return publicUrlRes.data.publicUrl;
+    // Kirim base64 murni (tanpa prefix data:image/...) → GAS simpan ke Google Drive
+    var data = await apiCall('uploadAuditPhoto', [String(dataUrl).split(',')[1] || dataUrl, fileName]);
+    if (data && data.url) return data.url;
+    console.warn('Upload foto: URL kosong');
+    return null;
   } catch(e) {
     console.warn('Upload failed:', e.message);
     return null;
@@ -652,7 +527,7 @@ async function capturePhotoStatus() {
   }
 
   // Upload to Storage (async)
-  var publicUrl = await uploadPhotoToSupabase(dataUrl, 'status');
+  var publicUrl = await uploadPhoto(dataUrl, 'status');
   if (publicUrl && fotoInput) {
     fotoInput.value = publicUrl;
     console.log('Foto uploaded:', publicUrl);
@@ -768,7 +643,7 @@ async function capturePhotoComplaint() {
   }
 
   // Upload to Supabase Storage
-  var publicUrl = await uploadPhotoToSupabase(dataUrl, 'complaint');
+  var publicUrl = await uploadPhoto(dataUrl, 'complaint');
   if (publicUrl && fotoInput) {
     fotoInput.value = publicUrl;
     console.log('Foto uploaded:', publicUrl);
@@ -828,8 +703,7 @@ async function confirmDeleteTicket() {
   btn.textContent = '\u23F3 Menghapus...';
 
   try {
-    var res = await supabase.from('main_data').delete().eq('tiket_id', tiketId);
-    if (res.error) throw res.error;
+    await apiCall('deleteComplaint', [tiketId]);
 
     showToast('Tiket ' + tiketId + ' berhasil dihapus!', 'success');
     document.getElementById('modal-delete-ticket-overlay').classList.remove('show');
@@ -854,10 +728,9 @@ async function sendTicketWA(tiketId) {
   if (!overlay) return;
 
   try {
-    // Fetch ticket data
-    var res = await supabase.from('main_data').select('*').eq('tiket_id', tiketId).single();
-    if (res.error) throw res.error;
-    var t = res.data;
+    // Fetch ticket data dari backend
+    var all = await apiCall('getAllComplaints', []);
+    var t = (all || []).find(function(x) { return x.tiket_id === tiketId; });
     if (!t) { showToast('Tiket tidak ditemukan', 'error'); return; }
     if (!t.no_wa) { showToast('Nomor WA tidak tersedia', 'error'); return; }
 
@@ -910,18 +783,8 @@ async function doSendWA() {
   btn.textContent = '\u23F3 Mengirim...';
 
   try {
-    var funcUrl = localStorage.getItem('ga_function_url') || 'https://ytoopikqfmiomgfzhoem.supabase.co/functions/v1/wa-notifications';
-    var url = funcUrl.replace(/\/$/, '') + '/send';
-
-    var response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: number, message: message })
-    });
-
-    var result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Gagal mengirim WA');
-
+    // Kirim via backend GAS (token Fonnte tersimpan di PropertiesService)
+    await apiCall('sendWaMessage', [number, message]);
     showToast('Notifikasi WA berhasil dikirim ke ' + number, 'success');
     document.getElementById('modal-wa-ticket-overlay').classList.remove('show');
   } catch(e) {
@@ -962,7 +825,7 @@ function exportTicketsCSV() {
       t.teknisi || '',
       (t.deskripsi || '').replace(/"/g, '""'),
       t.timestamp ? new Date(t.timestamp).toLocaleDateString('id-ID') : '',
-      t.tanggal_selesai ? new Date(t.tanggal_selesai).toLocaleDateString('id-ID') : '',
+      t.waktu_selesai ? new Date(String(t.waktu_selesai).replace(' ', 'T')).toLocaleDateString('id-ID') : '',
       t.rating_survei || ''
     ];
   });
@@ -998,10 +861,10 @@ function exportTicketsCSV() {
 // ════════════════════════════════════════════════════════════
 async function loadOpenTicketBadge() {
   try {
-    var res = await supabase.from('main_data').select('*', { count: 'exact', head: true }).eq('status', 'Open');
+    var all = await apiCall('getAllComplaints', []);
     var badge = document.getElementById('badge-open');
     if (!badge) return;
-    var count = res.count || 0;
+    var count = (all || []).filter(function(m) { return m.status === 'Open'; }).length;
     if (count > 0) {
       badge.textContent = count > 99 ? '99+' : count;
       badge.style.display = 'inline';

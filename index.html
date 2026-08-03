@@ -968,8 +968,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           <option value="Admin">Admin</option>
         </select>
       </div>
-      <div style="color:#475569;font-size:0.72rem;margin-bottom:12px;padding:8px 12px;background:rgba(251,191,36,0.1);border-radius:8px;border:1px solid rgba(251,191,36,0.15)">
-        ⚠️ User baru hanya ditambahkan ke tabel user_list. Untuk bisa login, buat akun auth di Supabase Dashboard dengan email yang sama.
+      <div style="color:#475569;font-size:0.72rem;margin-bottom:12px;padding:8px 12px;background:rgba(99,102,241,0.1);border-radius:8px;border:1px solid rgba(99,102,241,0.15)">
+        💡 Password wajib diisi untuk user baru — digunakan untuk login ke aplikasi (disimpan terenkripsi di spreadsheet).
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button type="submit" class="login-btn login-btn-primary" style="flex:1">Simpan</button>
@@ -979,7 +979,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
-<script src="src/supabase.js"></script>
+<script src="src/gas.js"></script>
 <script src="src/utils.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/auth.js"></script>
@@ -1011,32 +1011,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     }
     return;
   }
-  if (!supabaseReady || !supabase) {
-    hideLoading();
-    showLoginScreen();
-    return;
-  }
-  supabase.auth.getSession().then(function(sessionRes) {
-    if (sessionRes.data.session) {
-      var email = sessionRes.data.session.user.email;
-      supabase.from('user_list').select('*').eq('email', email).single().then(function(res) {
-        if (res.data && res.data.status === 'Aktif') {
-          APP.user = res.data;
-          hideLoading();
-          initApp();
-        } else {
-          supabase.auth.signOut();
-          setTimeout(function() { hideLoading(); showLoginScreen(); }, 1000);
-        }
-      }).catch(function() {
-        hideLoading();
-        showLoginScreen();
-      });
+  // Pulihkan sesi login (token GAS di localStorage, divalidasi ke server)
+  restoreSession(function(ok) {
+    if (ok) {
+      hideLoading();
+      initApp();
     } else {
-      setTimeout(function() { hideLoading(); showLoginScreen(); }, 1200);
+      setTimeout(function() { hideLoading(); showLoginScreen(); }, 600);
     }
-  }).catch(function() {
-    setTimeout(function() { hideLoading(); showLoginScreen(); }, 1200);
   });
 })();
 </script>
