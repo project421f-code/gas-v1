@@ -23,11 +23,20 @@ var APP = { user: null, token: '', currentPage: 'dashboard', charts: {}, surveyT
 var GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbx8QERx-jfwsHnRWU72SDjgt_BG7XFmgHsfJ_cMfAWd9y4Uf61sPIvgrvQ2kC27TkM4GA/exec';
 
 /**
- * Ambil URL Web App GAS yang aktif (dari localStorage, atau default)
+ * Ambil URL Web App GAS yang aktif.
+ * Prioritas: localStorage 'ga_app_url' (hanya jika URL http(s) yang valid), lalu GAS_APP_URL default.
+ * Nilai localStorage yang rusak (bukan URL, 'null', 'undefined', dll) diabaikan agar
+ * tidak menimpa URL default yang sudah di-hardcode.
  */
 function getGasUrl() {
-  var url = localStorage.getItem('ga_app_url') || GAS_APP_URL;
-  return String(url || '').replace(/\/+$/, '');
+  var stored = '';
+  try { stored = localStorage.getItem('ga_app_url') || ''; } catch (e) { /* ignore */ }
+  stored = String(stored).trim();
+  // Hanya pakai nilai localStorage jika benar-benar URL http(s)
+  if (stored && /^https?:\/\//.test(stored)) {
+    return stored.replace(/\/+$/, '');
+  }
+  return String(GAS_APP_URL || '').replace(/\/+$/, '');
 }
 
 function gasConfigured() {
