@@ -617,3 +617,479 @@ function checkGoogleSSO() {
 
 
 
+
+
+var IMPORT_ALLOWED_SHEETS = [
+  'Asset_List',
+  'Master_SLA',
+  'Master_CS_Schedule',
+  'Master_Lokasi',
+  'Master_Patrol_Checkpoints',
+  'Master_Patrol_Schedule',
+  'User_List'
+];
+
+function importMasterData(sheetName, csvData) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN]);
+
+    if (IMPORT_ALLOWED_SHEETS.indexOf(sheetName) === -1) {
+      throw new Error('Sheet "' + sheetName + '" tidak diizinkan untuk import.');
+    }
+
+    if (!csvData || csvData.trim() === '') {
+      throw new Error('Data CSV kosong.');
+    }
+
+    return withLock(function() {
+      var sheet = getSheet(sheetName);
+      
+      // Parse CSV (handle quoted fields) — pakai fungsi bersama
+      var lines = parseCSVToLines(csvData);
+      
+      if (lines.length < 2) {
+        throw new Error('Data CSV harus memiliki minimal 2 baris (header + 1 data).');
+      }
+
+      // Parse header
+      var headers = parseCSVLine(lines[0]);
+      var headerMap = {};
+      headers.forEach(function(h, idx) {
+        headerMap[h.trim()] = idx;
+      });
+
+      // Get existing headers from sheet
+      var existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      
+      // Build column mapping: import headers → sheet column index
+      var colMap = {};
+      for (var h in headerMap) {
+        var colIdx = existingHeaders.indexOf(h);
+        if (colIdx >= 0) {
+          colMap[h] = colIdx;
+        }
+      }
+
+      if (Object.keys(colMap).length === 0) {
+        throw new Error('Tidak ada kolom yang cocok dengan header sheet. Pastikan header CSV sesuai.');
+      }
+
+      // Get last row to append after
+      var lastRow = sheet.getLastRow();
+      if (lastRow < 1) lastRow = 1;
+      var totalCols = existingHeaders.length;
+      
+      var imported = 0;
+      var errors = 0;
+
+      for (var li = 1; li < lines.length; li++) {
+        if (!lines[li].trim()) continue;
+        
+        try {
+          var values = parseCSVLine(lines[li]);
+          var newRow = [];
+          for (var ci2 = 0; ci2 < totalCols; ci2++) {
+            newRow.push('');
+          }
+          
+          for (var h2 in colMap) {
+            var srcIdx = headerMap[h2];
+            if (srcIdx < values.length) {
+              newRow[colMap[h2]] = values[srcIdx].trim();
+            }
+          }
+          
+          sheet.appendRow(newRow);
+          imported++;
+        } catch (rowErr) {
+          errors++;
+          Logger.log('Import row ' + (li + 1) + ' error: ' + rowErr.message);
+        }
+      }
+
+      return successResponse({ imported: imported, errors: errors }, 'Import selesai: ' + imported + ' baris ditambahkan' + (errors > 0 ? ', ' + errors + ' gagal.' : '.'));
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function previewImportData(sheetName, csvData) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN]);
+
+    if (IMPORT_ALLOWED_SHEETS.indexOf(sheetName) === -1) {
+      throw new Error('Sheet "' + sheetName + '" tidak diizinkan.');
+    }
+    if (!csvData || csvData.trim() === '') {
+      throw new Error('Data CSV kosong.');
+    }
+
+    var lines = parseCSVToLines(csvData);
+    if (lines.length < 2) {
+      throw new Error('CSV harus memiliki header + minimal 1 baris data.');
+    }
+
+    var headers = parseCSVLine(lines[0]);
+    var totalRows = lines.length - 1;
+
+    // Ambil 10 baris pertama untuk preview
+    var previewRows = [];
+    var maxPreview = Math.min(totalRows, 10);
+    for (var i = 1; i <= maxPreview; i++) {
+      var rowData = {};
+      var values = parseCSVLine(lines[i]);
+      for (var j = 0; j < headers.length; j++) {
+        rowData[headers[j].trim()] = (j < values.length) ? values[j].trim() : '';
+      }
+      previewRows.push(rowData);
+    }
+
+    // Cek kecocokan header dengan sheet
+    var sheet = getSheet(sheetName);
+    var existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var matchedCols = 0;
+    var unmatchedCols = [];
+    for (var hi = 0; hi < headers.length; hi++) {
+      var h = headers[hi].trim();
+      if (existingHeaders.indexOf(h) >= 0) {
+        matchedCols++;
+      } else {
+        unmatchedCols.push(h);
+      }
+    }
+
+    return successResponse({
+      headers: headers,
+      totalRows: totalRows,
+      previewRows: previewRows,
+      matchedCols: matchedCols,
+      unmatchedCols: unmatchedCols,
+      totalCols: headers.length
+    }, 'Ditemukan ' + totalRows + ' baris data. ' + matchedCols + '/' + headers.length + ' kolom cocok.');
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function parseCSVLine(line) {
+  var result = [];
+  var current = '';
+  var inQuotes = false;
+  // Bersihkan carriage return (Windows CRLF)
+  line = line.replace(/\r/g, '');
+  for (var i = 0; i < line.length; i++) {
+    var chr = line[i];
+    if (chr === '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (chr === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += chr;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseCSVToLines(csvData) {
+  var lines = [];
+  var currentLine = '';
+  var inQuote = false;
+  for (var ci = 0; ci < csvData.length; ci++) {
+    var ch = csvData[ci];
+    if (ch === '"') {
+      inQuote = !inQuote;
+    } else if (ch === '\n' && !inQuote) {
+      lines.push(currentLine);
+      currentLine = '';
+    } else {
+      currentLine += ch;
+    }
+  }
+  if (currentLine.trim()) lines.push(currentLine);
+  return lines;
+}
+
+function loadMasterData() {
+  try {
+    var user = getActiveUserSession();
+    
+    // Baca semua master data — gunakan getCachedSheetData untuk yang jarang berubah
+    var userList = getCachedSheetData(CONFIG.SHEETS.USER_LIST, 600);
+    var slaList = getCachedSheetData(CONFIG.SHEETS.MASTER_SLA, 3600);
+    var csSchedule = getCachedSheetData(CONFIG.SHEETS.MASTER_CS_SCHEDULE, 3600);
+    var locationList = getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 3600);
+    var patrolCheckpoints = getCachedSheetData(CONFIG.SHEETS.PATROL_CHECKPOINTS, 3600);
+    var patrolSchedules = getCachedSheetData(CONFIG.SHEETS.PATROL_SCHEDULE, 3600);
+    var assetList = getCachedSheetData(CONFIG.SHEETS.ASSET_LIST, 1800);
+    var kosList = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+    
+    // Jangan kirim field password ke frontend
+    var safeUserList = userList.map(function(u) {
+      return {
+        user_id: u.user_id,
+        email: u.email,
+        nama: u.nama,
+        role: u.role,
+        tim: u.tim,
+        status: u.status,
+        no_wa: u.no_wa || ''
+      };
+    });
+    
+    // Build SLA categories untuk dropdown frontend
+    var slaCategories = {};
+    slaList.forEach(function(d) {
+      if (d.kategori && !slaCategories[d.kategori]) {
+        slaCategories[d.kategori] = [];
+      }
+      if (d.sub_kategori && slaCategories[d.kategori] && slaCategories[d.kategori].indexOf(d.sub_kategori) === -1) {
+        slaCategories[d.kategori].push(d.sub_kategori);
+      }
+    });
+    
+    return successResponse({
+      userList: safeUserList,
+      slaList: slaList,
+      slaCategories: slaCategories,
+      csSchedule: csSchedule,
+      locationList: locationList,
+      patrolCheckpoints: patrolCheckpoints,
+      patrolSchedules: patrolSchedules,
+      assetList: assetList,
+      kosList: kosList
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function generateWebhookStatusHtml() {
+  var status = getWebhookStatus();
+  var scriptUrl = ScriptApp.getService().getUrl();
+  var err = status.error;
+
+  // Status token
+  var tokenStatus = err ? 'unknown' : (status.wa_token_configured ? 'ok' : 'missing');
+  var tokenIcon = { 'ok': '✅', 'missing': '❌', 'unknown': '❓' }[tokenStatus];
+  var tokenText = { 'ok': 'Token WhatsApp <b>terkonfigurasi</b>',
+                    'missing': 'Token WhatsApp <b>BELUM dikonfigurasi</b>',
+                    'unknown': 'Gagal membaca status token' }[tokenStatus];
+  var tokenHint = status.wa_token_configured
+    ? 'Preview: ' + status.wa_token_preview
+    : 'Jalankan fungsi <code>setupWAToken()</code> di GAS Editor, lalu <b>Deploy ulang</b> Web App.';
+
+  // Status webhook terakhir
+  var wh = status.last_webhook;
+  var webhookHtml = wh ? '' +
+    '<div class="field"><span class="label">Waktu</span><span class="val">' + escapeHtml(wh.time) + '</span></div>' +
+    '<div class="field"><span class="label">Pengirim</span><span class="val">' + escapeHtml(wh.sender) + '</span></div>' +
+    '<div class="field"><span class="label">Nama</span><span class="val">' + escapeHtml(wh.name) + '</span></div>' +
+    '<div class="field"><span class="label">Pesan</span><span class="val mono">' + escapeHtml(wh.message_preview) + '</span></div>' +
+    '<div class="field"><span class="label">Aksi</span><span class="val">' + escapeHtml(wh.action) + '</span></div>' +
+    '<div class="field"><span class="label">Hasil</span><span class="val">' + escapeHtml(wh.result) + '</span></div>'
+    : '<div style="color:#64748b;padding:12px 0">Belum ada webhook yang diterima. Kirim pesan ke nomor WA atau klik tombol test di bawah.</div>';
+
+  return '<!DOCTYPE html>\n<html lang="id">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">\n<title>Webhook Status | ' + CONFIG.APP_NAME + '</title>\n<style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:linear-gradient(135deg,#0a0f1e,#111936);color:#e0e7ff;min-height:100vh;padding:32px 16px}' +
+    '.wrap{max-width:640px;margin:0 auto}' +
+    'h1{font-size:1.3rem;font-weight:800;margin-bottom:4px}' +
+    'h1 span{font-size:1.1rem}' +
+    '.sub{color:#64748b;font-size:.82rem;margin-bottom:24px}' +
+    '.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;margin-bottom:16px}' +
+    '.card-title{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:14px}' +
+    '.field{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);gap:12px}' +
+    '.field:last-child{border:none}' +
+    '.label{color:#94a3b8;font-size:.82rem;min-width:100px;flex-shrink:0}' +
+    '.val{font-size:.85rem;text-align:right;word-break:break-all}' +
+    '.mono{font-family:monospace;font-size:.78rem;color:#a5b4fc;max-width:300px;overflow:hidden;text-overflow:ellipsis}' +
+    '.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:700}' +
+    '.badge-ok{background:rgba(52,211,153,.15);color:#34d399}' +
+    '.badge-missing{background:rgba(239,68,68,.15);color:#fca5a5}' +
+    '.badge-unknown{background:rgba(148,163,184,.15);color:#94a3b8}' +
+    '.hint{font-size:.78rem;color:#64748b;margin-top:8px;padding:10px 14px;background:rgba(99,102,241,.1);border-radius:10px;line-height:1.5}' +
+    '.hint code{background:rgba(0,0,0,.3);padding:2px 6px;border-radius:4px;font-size:.75rem}' +
+    '.btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}' +
+    '.btn{display:inline-block;padding:10px 18px;border-radius:10px;text-decoration:none;font-size:.82rem;font-weight:600;text-align:center;transition:all .2s}' +
+    '.btn-primary{background:#6366f1;color:#fff}' +
+    '.btn-primary:hover{background:#4f46e5}' +
+    '.btn-outline{border:1px solid rgba(255,255,255,.15);color:#c7d2fe}' +
+    '.btn-outline:hover{background:rgba(255,255,255,.05)}' +
+    '.btn-success{background:#10b981;color:#fff}' +
+    '.btn-success:hover{background:#059669}' +
+    '.empty{text-align:center;padding:20px 0}' +
+    '.url-box{background:rgba(0,0,0,.2);border-radius:10px;padding:12px 14px;font-family:monospace;font-size:.78rem;color:#a5b4fc;word-break:break-all;margin:8px 0}' +
+    '</style>\n</head>\n<body>\n<div class="wrap">' +
+    '<h1><span>📡</span> Webhook Status</h1>' +
+    '<p class="sub">' + CONFIG.APP_NAME + ' — Validasi koneksi WhatsApp &amp; webhook Fonnte</p>' +
+    '<!-- KARTU 1: STATUS TOKEN -->' +
+    '<div class="card">' +
+    '<div class="card-title">🔑 WhatsApp API Token</div>' +
+    '<div style="margin-bottom:10px"><span class="badge badge-' + tokenStatus + '">' + tokenIcon + ' ' + { 'ok': 'Terkonfigurasi', 'missing': 'Belum Diset', 'unknown': 'Error' }[tokenStatus] + '</span></div>' +
+    '<div class="hint">' + tokenText + '<br>' + tokenHint + '</div>' +
+    '</div>' +
+    '<!-- KARTU 2: WEBHOOK URL -->' +
+    '<div class="card">' +
+    '<div class="card-title">🌐 Webhook URL (Fonnte)</div>' +
+    '<div class="url-box">' + escapeHtml(scriptUrl) + '</div>' +
+    '<div class="hint">' +
+    '1. Buka <a href="https://panel.fonnte.com" target="_blank" style="color:#6366f1">panel.fonnte.com</a> → Device → Edit<br>' +
+    '2. Paste URL di atas ke kolom <b>Webhook URL</b><br>' +
+    '3. Nyalakan <b>Auto Read</b> (WAJIB ON)<br>' +
+    '4. Klik Save &nbsp; <span style="color:#f59e0b">⚡</span>' +
+    '</div>' +
+    '</div>' +
+    '<!-- KARTU 3: WEBHOOK TERAKHIR -->' +
+    '<div class="card">' +
+    '<div class="card-title">📩 Webhook Terakhir Diterima</div>' +
+    webhookHtml +
+    '<div class="btn-group">' +
+    '<a href="' + scriptUrl + '?testWebhook=1&sender=628xxx&message=Nama:Test%0ALokasi:Kamar%0ADeskripsi:Test%20webhook" class="btn btn-primary">🧪 Test Tiket</a>' +
+    '<a href="' + scriptUrl + '?testWebhook=1&sender=628xxx&message=5" class="btn btn-success">⭐ Test Survey</a>' +
+    '<a href="' + scriptUrl + '" class="btn btn-outline">🏠 Beranda</a>' +
+    '</div>' +
+    '<div class="hint" style="margin-top:12px">' +
+    'Klik tombol test di atas setelah deploy untuk simulasi webhook.<br>' +
+    'Ganti <code>628xxx</code> dengan nomor WA tujuan (format 628xx tanpa +).' +
+    '</div>' +
+    '</div>' +
+    '<!-- KARTU 4: INFORMASI -->' +
+    '<div class="card">' +
+    '<div class="card-title">ℹ️ Informasi Sistem</div>' +
+    '<div class="field"><span class="label">Spreadsheet</span><span class="val mono" style="font-size:.7rem">' + escapeHtml(status.spreadsheet_id || '-') + '</span></div>' +
+    '<div class="field"><span class="label">Timezone</span><span class="val">' + escapeHtml(status.timezone || '-') + '</span></div>' +
+    '</div>' +
+    '</div>\n</body>\n</html>';
+}
+
+function generateComplaintReportHtml(lokasiPrefill, result) {
+  var scriptUrl = ScriptApp.getService().getUrl();
+  var currentYear = new Date().getFullYear();
+  
+  // Kategori options
+  var kategoriOptions = '';
+  try {
+    var slaData = getCachedSheetData(CONFIG.SHEETS.MASTER_SLA, 3600);
+    var kategoris = {};
+    slaData.forEach(function(d) {
+      if (d.kategori && !kategoris[d.kategori]) {
+        kategoris[d.kategori] = true;
+      }
+    });
+    var katList = Object.keys(kategoris);
+    katList.forEach(function(k) {
+      kategoriOptions += '<option value="' + k + '">' + k + '</option>';
+    });
+  } catch(e) {
+    kategoriOptions = '<option>Lainnya</option>';
+  }
+  if (kategoriOptions.indexOf('Lainnya') < 0) {
+    kategoriOptions += '<option>Lainnya</option>';
+  }
+  
+  // Lokasi options
+  var lokasiOptions = '<option value="">Pilih Lokasi</option>';
+  try {
+    var csData = getCachedSheetData(CONFIG.SHEETS.MASTER_CS_SCHEDULE, 3600);
+    var seenLokasi = {};
+    csData.forEach(function(d) {
+      if (d.lokasi_area && !seenLokasi[d.lokasi_area]) {
+        seenLokasi[d.lokasi_area] = true;
+        var sel = (lokasiPrefill === d.lokasi_area) ? ' selected' : '';
+        lokasiOptions += '<option value="' + escapeHtml(d.lokasi_area) + '"' + sel + '>' + escapeHtml(d.lokasi_area) + '</option>';
+      }
+    });
+  } catch(e) {}
+  
+  // Success/Error message
+  var msgHtml = '';
+  if (result) {
+    if (result.success || result.status === true) {
+      msgHtml = '<div class="msg success">' +
+        '<div style="font-size:2.5rem;margin-bottom:12px">✅</div>' +
+        '<h2 style="color:#34d399;margin-bottom:8px">Laporan Terkirim!</h2>' +
+        '<p style="color:#e0e7ff">' + escapeHtml(result.message || 'Tiket berhasil dibuat. Tim kami akan segera menindaklanjuti.') + '</p>' +
+        (result.data && result.data.tiket_id ? '<p style="color:#94a3b8;margin-top:8px;font-size:0.82rem">ID Tiket: <strong>' + escapeHtml(result.data.tiket_id) + '</strong></p>' : '') +
+        '<a href="' + scriptUrl + '?page=report" class="btn btn-primary" style="margin-top:16px">📝 Laporkan Lagi</a>' +
+        '</div>';
+    } else {
+      msgHtml = '<div class="msg error">' +
+        '<div style="font-size:2.5rem;margin-bottom:12px">❌</div>' +
+        '<h2 style="color:#fca5a5;margin-bottom:8px">Gagal Mengirim</h2>' +
+        '<p style="color:#e0e7ff">' + escapeHtml(result.error || 'Terjadi kesalahan. Silakan coba lagi.') + '</p>' +
+        '</div>';
+    }
+  }
+  
+  var formDisplay = result ? 'style="display:none"' : '';
+  
+  return '<!DOCTYPE html>\n<html lang="id">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">\n<title>Lapor Kerusakan | ' + CONFIG.ORG_NAME + '</title>\n<style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:linear-gradient(135deg,#0a0f1e,#111936);color:#e0e7ff;min-height:100vh;padding:24px 16px}' +
+    '.wrap{max-width:520px;margin:0 auto}' +
+    '.logo{width:56px;height:56px;margin:0 auto 16px;background:linear-gradient(135deg,#ef4444,#f87171);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 0 30px rgba(239,68,68,.3)}' +
+    'h1{font-size:1.3rem;font-weight:800;text-align:center;margin-bottom:4px}' +
+    'h1 span{font-size:1.1rem}' +
+    '.sub{color:#64748b;font-size:.82rem;text-align:center;margin-bottom:24px}' +
+    '.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;margin-bottom:16px}' +
+    '.form-group{margin-bottom:14px}' +
+    'label{display:block;font-size:.78rem;font-weight:600;color:#94a3b8;margin-bottom:6px}' +
+    'input,select,textarea{width:100%;padding:10px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#e0e7ff;font-family:inherit;font-size:.85rem;outline:none;transition:all .2s}' +
+    'input:focus,select:focus,textarea:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.2)}' +
+    'select option{background:#1e293b;color:#e0e7ff}' +
+    'textarea{resize:vertical;min-height:80px}' +
+    '.btn{display:inline-flex;align-items:center;gap:6px;padding:12px 24px;border:none;border-radius:10px;font-family:inherit;font-size:.9rem;font-weight:600;cursor:pointer;text-decoration:none;transition:all .2s}' +
+    '.btn-primary{background:linear-gradient(135deg,#ef4444,#f87171);color:#fff;width:100%;justify-content:center}' +
+    '.btn-primary:hover{box-shadow:0 4px 15px rgba(239,68,68,.4);transform:translateY(-1px)}' +
+    '.btn-secondary{background:rgba(255,255,255,.08);color:#e0e7ff;border:1px solid rgba(255,255,255,.12);width:100%;justify-content:center}' +
+    '.msg{text-align:center;padding:32px 20px}' +
+    '.ftr{text-align:center;padding:16px;color:#475569;font-size:.75rem}' +
+    '.ftr a{color:#6366f1;text-decoration:none}' +
+    '.urg{display:flex;gap:6px}' +
+    '.urg-btn{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#94a3b8;font-size:.75rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;font-family:inherit}' +
+    '.urg-btn:hover{border-color:#6366f1;color:#e0e7ff}' +
+    '.urg-btn.active{background:rgba(239,68,68,.2);border-color:#ef4444;color:#fca5a5}' +
+    '</style>' +
+    '</head><body>' +
+    '<div class="wrap">' +
+    '<div class="logo">🔧</div>' +
+    '<h1><span>🔧</span> Lapor Kerusakan</h1>' +
+    '<p class="sub">Laporkan kerusakan fasilitas — tim kami akan segera merespon</p>' +
+    msgHtml +
+    '<form method="GET" action="' + scriptUrl + '" class="card" ' + formDisplay + '>' +
+    '<input type="hidden" name="page" value="report">' +
+    '<input type="hidden" name="submit" value="1">' +
+    '<input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">' +
+    '<div class="form-group"><label>Nama Pelapor *</label><input type="text" name="nama" required placeholder="Nama Anda"></div>' +
+    '<div class="form-group"><label>No. WhatsApp</label><input type="tel" name="wa" placeholder="628xxx (opsional, untuk notifikasi)"></div>' +
+    '<div class="form-group"><label>Lokasi *</label><select name="lokasi" required>' + lokasiOptions + '</select></div>' +
+    '<div class="form-group"><label>Kategori</label><select name="kategori">' + kategoriOptions + '</select></div>' +
+    '<div class="form-group"><label>Urgensi</label><div class="urg" id="urg-group">' +
+    '<span class="urg-btn" data-val="Low" onclick="selectUrg(this)">🟢 Rendah</span>' +
+    '<span class="urg-btn active" data-val="Medium" onclick="selectUrg(this)">🟡 Sedang</span>' +
+    '<span class="urg-btn" data-val="High" onclick="selectUrg(this)">🔴 Tinggi</span>' +
+    '</div><input type="hidden" name="urgensi" id="f-urgensi" value="Medium"></div>' +
+    '<div class="form-group"><label>Deskripsi Kerusakan *</label><textarea name="deskripsi" required placeholder="Jelaskan detail kerusakan..."></textarea></div>' +
+    '<button type="submit" class="btn btn-primary">📨 Kirim Laporan</button>' +
+    '</form>' +
+    '<div style="text-align:center;margin-top:12px"><a href="' + scriptUrl + '?page=home" style="color:#64748b;font-size:.78rem">🏠 Kembali ke beranda</a></div>' +
+    '<div class="ftr">' + currentYear + ' &bull; ' + CONFIG.ORG_NAME + '</div>' +
+    '</div>' +
+    '<script>' +
+    'function selectUrg(el){' +
+    'document.querySelectorAll(".urg-btn").forEach(function(b){b.classList.remove("active")});' +
+    'el.classList.add("active");' +
+    'document.getElementById("f-urgensi").value=el.getAttribute("data-val")}' +
+    '</script>' +
+    '</body></html>';
+}

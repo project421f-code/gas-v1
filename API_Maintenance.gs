@@ -1054,3 +1054,101 @@ function getRatingSurveyStats() {
     return errorResponse(e.message);
   }
 }
+
+
+function getComplaintById(tiketId) {
+  try {
+    var user = getActiveUserSession();
+    if (!tiketId) throw new Error('ID tiket wajib diisi.');
+
+    var found = findRow(CONFIG.SHEETS.MAIN_DATA, 'tiket_id', tiketId);
+    if (!found) throw new Error('Tiket tidak ditemukan.');
+
+    var d = found.data;
+    return successResponse({
+      tiket_id: d.tiket_id,
+      timestamp: formatDateId(d.timestamp),
+      no_wa: d.no_wa,
+      nama_customer: d.nama_customer,
+      lokasi: d.lokasi,
+      deskripsi: d.deskripsi,
+      foto_kerusakan: d.foto_kerusakan || '',
+      kategori: d.kategori,
+      sub_kategori: d.sub_kategori || '',
+      urgensi: d.urgensi,
+      target_sla_jam: d.target_sla_jam,
+      status: d.status,
+      teknisi: d.teknisi,
+      foto_perbaikan: d.foto_perbaikan,
+      catatan: d.catatan,
+      waktu_selesai: d.waktu_selesai ? formatDateId(d.waktu_selesai) : '-',
+      durasi_jam: d.durasi_jam || '-',
+      status_sla: d.status_sla || '-',
+      rating_survei: d.rating_survei || '-'
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function exportDataToCSV(tableId, filters) {
+  try {
+    var user = getActiveUserSession();
+    var sheetMap = {
+      'maintenance': CONFIG.SHEETS.MAIN_DATA,
+      'patrol': CONFIG.SHEETS.PATROL_LOG,
+      'inspection': CONFIG.SHEETS.ASSET_INSPECTION,
+      'booking': CONFIG.SHEETS.ASSET_BOOKING,
+      'checklist': CONFIG.SHEETS.CS_DAILY_CHECKLIST,
+      'audit': CONFIG.SHEETS.AUDIT_HOUSEKEEPING,
+      'transaksi_kos': CONFIG.SHEETS.TRANSAKSI_KOS,
+      'kamar': CONFIG.SHEETS.MASTER_KAMAR
+    };
+
+    var sheetName = sheetMap[tableId];
+    if (!sheetName) throw new Error('Tabel tidak dikenali: ' + tableId);
+
+    var data = getSheetData(sheetName);
+
+    // Apply date filter if provided
+    if (filters) {
+      if (filters.tgl_mulai) {
+        var tglMulai = new Date(filters.tgl_mulai);
+        data = data.filter(function(d) { return d.timestamp && new Date(d.timestamp) >= tglMulai; });
+      }
+      if (filters.tgl_selesai) {
+        var tglSelesai = new Date(filters.tgl_selesai);
+        tglSelesai.setDate(tglSelesai.getDate() + 1);
+        data = data.filter(function(d) { return d.timestamp && new Date(d.timestamp) <= tglSelesai; });
+      }
+    }
+
+    // Ambil header dari sheet
+    var sheet = getSheet(sheetName);
+    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var headers = headerRow.filter(function(h) { return h && h.toString().trim(); });
+
+    // Build CSV
+    var csvRows = [];
+    csvRows.push(headers.join(','));
+
+    data.forEach(function(row) {
+      var vals = [];
+      headers.forEach(function(h) {
+        var val = String(row[h] || '');
+        // Escape quotes and wrap in quotes if contains comma or quote
+        if (val.indexOf(',') >= 0 || val.indexOf('"') >= 0 || val.indexOf('\n') >= 0) {
+          val = '"' + val.replace(/"/g, '""') + '"';
+        }
+        vals.push(val);
+      });
+      csvRows.push(vals.join(','));
+    });
+
+    var newline = String.fromCharCode(10);
+    var csvContent = csvRows.join(newline);
+    return successResponse({ csv: csvContent, filename: tableId + '_' + Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyyMMdd') + '.csv' });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}

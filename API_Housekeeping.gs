@@ -704,3 +704,95 @@ function uploadAuditPhoto(base64Data, fileName) {
   }
 }
 
+
+
+function getAllMasterLokasi() {
+  try {
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(CONFIG.SHEETS.MASTER_LOKASI);
+    
+    if (!sheet) {
+      // Sheet belum ada — buat dengan lock (cegah race condition)
+      return withLock(function() {
+        var existing = ss.getSheetByName(CONFIG.SHEETS.MASTER_LOKASI);
+        if (existing) {
+          return successResponse(getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 3600));
+        }
+        createMasterLokasiSheetInternal(ss);
+        return successResponse([]);
+      });
+    }
+    
+    var data = getCachedSheetData(CONFIG.SHEETS.MASTER_LOKASI, 3600);
+    return successResponse(data);
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function saveMasterLokasi(payload) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.SUPERVISOR]);
+
+    if (!payload.nama_lokasi || !payload.area) {
+      throw new Error('Nama lokasi dan area wajib diisi.');
+    }
+
+    return withLock(function() {
+      var sheet = getSheet(CONFIG.SHEETS.MASTER_LOKASI);
+
+      if (payload._rowIndex) {
+        // UPDATE
+        updateRowCells(CONFIG.SHEETS.MASTER_LOKASI, payload._rowIndex, {
+          nama_lokasi: payload.nama_lokasi,
+          area: payload.area,
+          tim_penanggungjawab: payload.tim_penanggungjawab || '',
+          status: payload.status || 'Aktif'
+        });
+        return successResponse(null, 'Lokasi berhasil diperbarui.');
+      } else {
+        // CREATE
+        var idLokasi = generateSequentialId('LOK', CONFIG.SHEETS.MASTER_LOKASI, 'id_lokasi');
+        sheet.appendRow([
+          idLokasi,
+          payload.nama_lokasi.trim(),
+          payload.area.trim(),
+          payload.tim_penanggungjawab || '',
+          payload.status || 'Aktif'
+        ]);
+        return successResponse(null, 'Lokasi "' + payload.nama_lokasi + '" berhasil ditambahkan.');
+      }
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function deleteMasterLokasi(rowIndex) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.SUPERVISOR]);
+
+    return withLock(function() {
+      var sheet = getSheet(CONFIG.SHEETS.MASTER_LOKASI);
+      sheet.deleteRow(rowIndex);
+      return successResponse(null, 'Lokasi berhasil dihapus.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function createMasterLokasiSheetInternal(ss) {
+  var headers = ['id_lokasi', 'nama_lokasi', 'area', 'tim_penanggungjawab', 'status'];
+  var newSheet = ss.insertSheet(CONFIG.SHEETS.MASTER_LOKASI);
+  newSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var hr = newSheet.getRange(1, 1, 1, headers.length);
+  hr.setBackground('#1a237e').setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
+  newSheet.setFrozenRows(1);
+  for (var i = 1; i <= headers.length; i++) {
+    newSheet.setColumnWidth(i, 150);
+  }
+  Logger.log('✅ Master_Lokasi sheet auto-created with lock.');
+}

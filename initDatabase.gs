@@ -112,6 +112,21 @@ var DB_HEADERS = {
 
   'Room_Status_Log': [
     'kode_kamar', 'status_sebelum', 'status_sesudah', 'pic', 'catatan', 'timestamp'
+  ],
+
+  'Master_Lokasi': [
+    'id_lokasi', 'nama_lokasi', 'area', 'tim_penanggungjawab', 'status'
+  ],
+
+  'Transaksi_Kos': [
+    'id_transaksi', 'kode_kamar', 'kode_kos', 'nama_tamu', 'no_wa_tamu',
+    'check_in', 'rencana_check_out', 'check_out_aktual', 'total_bayar',
+    'status', 'catatan', 'timestamp'
+  ],
+
+  'Persiapan_Kamar': [
+    'id_persiapan', 'kode_kamar', 'kode_kos', 'jenis', 'assigned_to',
+    'status', 'catatan', 'timestamp', 'selesai_pada'
   ]
 };
 
@@ -124,7 +139,8 @@ var DB_SHEET_ORDER = [
   'Master_Patrol_Checkpoints', 'Master_Patrol_Schedule',
   'Survey_GA', 'Master_Survey_Config',
   'Master_Kos', 'Master_Kamar',
-  'Guest_Booking', 'Room_Status_Log'
+  'Guest_Booking', 'Room_Status_Log',
+  'Master_Lokasi', 'Transaksi_Kos', 'Persiapan_Kamar'
 ];
 
 // ─── CHECKPOINT PATROLI (seed data untuk sheet baru) ───────

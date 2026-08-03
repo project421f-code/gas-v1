@@ -65,6 +65,11 @@ function showPage(page, el) {
     case 'roomstatus': renderRoomStatus(content); break;
     case 'surveyconfig': renderSurveyConfig(content); break;
     case 'settings': renderSettings(content); break;
+    case 'masterlokasi': renderMasterLokasi(content); break;
+    case 'tracker': renderCleaningTracker(content); break;
+    case 'kosprep': renderKosPrep(content); break;
+    case 'kostrx': renderKosTrx(content); break;
+    case 'globalsearch': renderGlobalSearch(content); break;
     case 'inspection': renderAssets(content); break;
     default: renderDashboard(content);
   }
@@ -141,6 +146,11 @@ function generateMobileMenu() {
     { page: 'masterkamar', icon: '🚪', label: 'Master Kamar', roles: ['Admin'] },
     { page: 'guestbooking', icon: '📋', label: 'Guest Book', roles: ['Admin'] },
     { page: 'roomstatus', icon: '🔄', label: 'R.Status', roles: ['Admin'] },
+    { page: 'masterlokasi', icon: '📍', label: 'Master Lokasi', roles: ['Admin'] },
+    { page: 'kostrx', icon: '📋', label: 'Trx Kos', roles: ['Admin'] },
+    { page: 'kosprep', icon: '🧹', label: 'Persiapan', roles: ['Admin'] },
+    { page: 'tracker', icon: '📊', label: 'Tracker', roles: ['Admin'] },
+    { page: 'globalsearch', icon: '🔍', label: 'Cari', roles: null },
     { page: 'surveyconfig', icon: '📋', label: 'Konfig Survey', roles: ['Admin'] },
     { page: 'users', icon: '👥', label: 'Users', roles: ['Admin'] },
     { page: 'mastersla', icon: '⏱️', label: 'SLA', roles: ['Admin'] },

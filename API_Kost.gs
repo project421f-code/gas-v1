@@ -541,3 +541,684 @@ function getKamarStatusSummary() {
     return errorResponse(e.message);
   }
 }
+
+
+function getAllPersiapanKamar(filterStatus, limit, offset) {
+  try {
+    var user = getActiveUserSession();
+    var data = getCachedSheetData(CONFIG.SHEETS.PERSIAPAN_KAMAR, 30);
+    
+    if (filterStatus && filterStatus !== 'Semua') {
+      data = data.filter(function(d) { return d.status === filterStatus; });
+    }
+    
+    var kamarData = getCachedSheetData(CONFIG.SHEETS.MASTER_KAMAR, 30);
+    var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 30);
+    var kamarMap = {}, kosMap = {};
+    kamarData.forEach(function(k) { kamarMap[k.kode_kamar] = k; });
+    kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    
+    data = data.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+    
+    data = data.map(function(d) {
+      var kmr = kamarMap[d.kode_kamar] || {};
+      return {
+        id_persiapan: d.id_persiapan,
+        kode_kamar: d.kode_kamar,
+        kode_kos: d.kode_kos,
+        nama_kamar: kmr.nama_kamar || '-',
+        nama_kos: kosMap[d.kode_kos] || '-',
+        jenis: d.jenis,
+        assigned_to: d.assigned_to || '',
+        status: d.status,
+        catatan: d.catatan || '',
+        timestamp: d.timestamp ? formatDateId(d.timestamp) : '-',
+        selesai_pada: d.selesai_pada ? formatDateId(d.selesai_pada) : '-'
+      };
+    });
+    
+    // Default pagination: limit 50, offset 0
+    var reqLimit = limit && !isNaN(limit) ? parseInt(limit) : 50;
+    var reqOffset = offset && !isNaN(offset) ? parseInt(offset) : 0;
+    var pagination = applyPagination(data, reqLimit, reqOffset);
+    
+    return successResponse({
+      data: pagination.paginatedData,
+      total: pagination.total,
+      limit: pagination.limit,
+      offset: pagination.offset,
+      hasMore: pagination.hasMore
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function createPersiapanKamar(payload) {
+  try {
+    var user = getActiveUserSession();
+
+    if (!payload.kode_kamar || !payload.jenis) {
+      throw new Error('Kamar dan jenis persiapan wajib diisi.');
+    }
+
+    return withLock(function() {
+      var kamarFound = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', payload.kode_kamar);
+      if (!kamarFound) throw new Error('Kamar tidak ditemukan.');
+
+      var sheet = getSheet(CONFIG.SHEETS.PERSIAPAN_KAMAR);
+      var id = generateId('PREP');
+      
+      sheet.appendRow([
+        id,
+        payload.kode_kamar,
+        kamarFound.data.kode_kos,
+        payload.jenis,
+        payload.assigned_to || '',
+        'Pending',
+        payload.catatan || '',
+        now(),
+        ''
+      ]);
+
+      // Update status kamar → Persiapan (kalau dari Tersedia atau Perbaikan)
+      if (kamarFound.data.status_kamar === 'Tersedia' || kamarFound.data.status_kamar === 'Perbaikan') {
+        updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, kamarFound.rowIndex, { status_kamar: 'Persiapan' });
+      }
+
+      return successResponse({ id_persiapan: id }, 'Tugas persiapan kamar berhasil dibuat.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function deletePersiapanKamar(idPersiapan) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN]);
+
+    return withLock(function() {
+      var found = findRow(CONFIG.SHEETS.PERSIAPAN_KAMAR, 'id_persiapan', idPersiapan);
+      if (!found) throw new Error('Data persiapan tidak ditemukan.');
+      var sheet = getSheet(CONFIG.SHEETS.PERSIAPAN_KAMAR);
+      sheet.deleteRow(found.rowIndex);
+      return successResponse(null, 'Tugas persiapan berhasil dihapus.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function updateStatusPersiapan(idPersiapan, newStatus) {
+  try {
+    var user = getActiveUserSession();
+
+    return withLock(function() {
+      var found = findRow(CONFIG.SHEETS.PERSIAPAN_KAMAR, 'id_persiapan', idPersiapan);
+      if (!found) throw new Error('Data persiapan tidak ditemukan.');
+
+      var updates = { status: newStatus };
+      
+      if (newStatus === 'Completed') {
+        updates.selesai_pada = now();
+      }
+
+      updateRowCells(CONFIG.SHEETS.PERSIAPAN_KAMAR, found.rowIndex, updates);
+
+      // Jika selesai, update status kamar → Tersedia
+      if (newStatus === 'Completed') {
+        var kamarFound = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', found.data.kode_kamar);
+        if (kamarFound && kamarFound.data.status_kamar === 'Persiapan') {
+          updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, kamarFound.rowIndex, { status_kamar: 'Tersedia' });
+        }
+      } else if (newStatus === 'In Progress') {
+        // Assign otomatis ke user yang mengerjakan
+        updates.assigned_to = user.nama;
+        updateRowCells(CONFIG.SHEETS.PERSIAPAN_KAMAR, found.rowIndex, { assigned_to: user.nama });
+      }
+
+      return successResponse(null, 'Status persiapan berhasil diubah ke "' + newStatus + '".');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function getAllTransaksiKos(filterStatus, limit, offset) {
+  try {
+    var user = getActiveUserSession();
+    var data = getCachedSheetData(CONFIG.SHEETS.TRANSAKSI_KOS, 30);
+    
+    if (filterStatus && filterStatus !== 'Semua') {
+      data = data.filter(function(d) { return d.status === filterStatus; });
+    }
+    
+    // Gabung dengan nama kamar & kos
+    var kamarData = getCachedSheetData(CONFIG.SHEETS.MASTER_KAMAR, 30);
+    var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+    var kamarMap = {}, kosMap = {};
+    kamarData.forEach(function(k) { kamarMap[k.kode_kamar] = k; });
+    kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    
+    data = data.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+    
+    data = data.map(function(d) {
+      var kmr = kamarMap[d.kode_kamar] || {};
+      return {
+        id_transaksi: d.id_transaksi,
+        kode_kamar: d.kode_kamar,
+        kode_kos: d.kode_kos,
+        nama_kamar: kmr.nama_kamar || '-',
+        nama_kos: kosMap[d.kode_kos] || '-',
+        nama_tamu: d.nama_tamu,
+        no_wa_tamu: d.no_wa_tamu,
+        check_in: d.check_in ? formatDateId(d.check_in) : '-',
+        rencana_check_out: d.rencana_check_out ? formatDateId(d.rencana_check_out) : '-',
+        check_out_aktual: d.check_out_aktual ? formatDateId(d.check_out_aktual) : '-',
+        total_bayar: d.total_bayar || '0',
+        status: d.status,
+        catatan: d.catatan || '',
+        timestamp: d.timestamp ? formatDateId(d.timestamp) : '-'
+      };
+    });
+    
+    // Default pagination: limit 50, offset 0
+    var reqLimit = limit && !isNaN(limit) ? parseInt(limit) : 50;
+    var reqOffset = offset && !isNaN(offset) ? parseInt(offset) : 0;
+    var pagination = applyPagination(data, reqLimit, reqOffset);
+    
+    return successResponse({
+      data: pagination.paginatedData,
+      total: pagination.total,
+      limit: pagination.limit,
+      offset: pagination.offset,
+      hasMore: pagination.hasMore
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function cancelTransaksiKos(idTransaksi) {
+  try {
+    var user = getActiveUserSession();
+    requireRole(user.role, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.SUPERVISOR]);
+
+    return withLock(function() {
+      var found = findRow(CONFIG.SHEETS.TRANSAKSI_KOS, 'id_transaksi', idTransaksi);
+      if (!found) throw new Error('Transaksi tidak ditemukan.');
+
+      updateRowCells(CONFIG.SHEETS.TRANSAKSI_KOS, found.rowIndex, { status: 'Cancelled' });
+
+      // Kembalikan status kamar ke Tersedia
+      var kamarFound = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', found.data.kode_kamar);
+      if (kamarFound && kamarFound.data.status_kamar === 'Terisi') {
+        updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, kamarFound.rowIndex, { status_kamar: 'Tersedia' });
+      }
+
+      return successResponse(null, 'Transaksi berhasil dibatalkan.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function searchPreviousCustomer(query) {
+  try {
+    var user = getActiveUserSession();
+    if (!query || query.length < 2) return successResponse([]);
+
+    var data = getSheetData(CONFIG.SHEETS.TRANSAKSI_KOS);
+    var q = query.toLowerCase().trim();
+    var seen = {};
+    var results = [];
+
+    // Sort by timestamp descending (riwayat terbaru dulu)
+    data.sort(function(a, b) {
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+
+    data.forEach(function(d) {
+      var nama = (d.nama_tamu || '').toLowerCase();
+      var wa = (d.no_wa_tamu || '').toLowerCase();
+      var key = d.nama_tamu + '|' + d.no_wa_tamu;
+
+      // Hanya dari transaksi Completed/Cancelled, dan unik per nama+wa
+      if (d.status !== 'Completed' && d.status !== 'Cancelled') return;
+      if (seen[key]) return;
+
+      if (nama.indexOf(q) >= 0 || wa.indexOf(q) >= 0) {
+        seen[key] = true;
+        results.push({
+          nama_tamu: d.nama_tamu,
+          no_wa_tamu: d.no_wa_tamu || ''
+        });
+      }
+    });
+
+    // Batasi maksimal 10 hasil
+    return successResponse(results.slice(0, 10));
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function getCleaningTracker(bulan) {
+  try {
+    var periode = bulan || Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM');
+    
+    var prepData = getCachedSheetData(CONFIG.SHEETS.PERSIAPAN_KAMAR, 30);
+    var kamarData = getCachedSheetData(CONFIG.SHEETS.MASTER_KAMAR, 30);
+    var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+    
+    var kamarMap = {};
+    kamarData.forEach(function(k) { kamarMap[k.kode_kamar] = k; });
+    
+    var kosMap = {};
+    kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    
+    // Filter hanya yang completed di bulan ini
+    var completed = prepData.filter(function(d) {
+      if (d.status !== 'Completed' || !d.selesai_pada) return false;
+      var tgl = Utilities.formatDate(new Date(d.selesai_pada), CONFIG.TIMEZONE, 'yyyy-MM');
+      return tgl === periode;
+    });
+    
+    // Group by staff
+    var staffStats = {};
+    var totalCleaned = 0;
+    
+    completed.forEach(function(d) {
+      var nama = d.assigned_to || 'Unassigned';
+      if (!staffStats[nama]) {
+        staffStats[nama] = {
+          nama: nama,
+          total: 0,
+          check_in_prep: 0,
+          after_checkout: 0,
+          maintenance_clean: 0,
+          kamarList: []
+        };
+      }
+      var s = staffStats[nama];
+      s.total++;
+      totalCleaned++;
+      if (d.jenis === 'Check-in Prep') s.check_in_prep++;
+      else if (d.jenis === 'After Check-out') s.after_checkout++;
+      else if (d.jenis === 'Perbaikan Clean') s.maintenance_clean++;
+      
+      var kmr = kamarMap[d.kode_kamar] || {};
+      s.kamarList.push({
+        nama_kamar: kmr.nama_kamar || '-',
+        nama_kos: kosMap[d.kode_kos] || '-',
+        jenis: d.jenis,
+        selesai_pada: formatDateId(d.selesai_pada)
+      });
+    });
+    
+    // Sort by total descending
+    var staffRanking = Object.values(staffStats).sort(function(a, b) { return b.total - a.total; });
+    
+    return successResponse({
+      periode: periode,
+      totalCleaned: totalCleaned,
+      totalTasks: prepData.filter(function(d) { return d.status === 'Completed'; }).length,
+      staffRanking: staffRanking,
+      staffCount: staffRanking.length
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function updateRoomStatus(idKamar, newStatus) {
+  try {
+    var user = getActiveUserSession();
+
+    if (!idKamar || !newStatus) throw new Error('ID kamar dan status baru wajib diisi.');
+    var allowedStatus = ['Tersedia', 'Persiapan', 'Terisi', 'Perbaikan'];
+    if (allowedStatus.indexOf(newStatus) === -1) throw new Error('Status tidak valid.');
+
+    return withLock(function() {
+      var found = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', idKamar);
+      if (!found) throw new Error('Kamar tidak ditemukan.');
+
+      var oldStatus = found.data.status_kamar;
+
+      // Validasi transisi status
+      if (oldStatus === newStatus) throw new Error('Status kamar sudah "' + newStatus + '".');
+
+      // Transisi yang diizinkan (dari → ke):
+      // Tersedia → Perbaikan (kerusakan)
+      // Perbaikan → Tersedia (selesai perbaikan)
+      // Persiapan → Tersedia (selesai bersih)
+      if (oldStatus === 'Terisi' && newStatus !== 'Persiapan' && newStatus !== 'Tersedia') {
+        throw new Error('Kamar Terisi hanya bisa diubah ke Persiapan (check-out) atau Tersedia (jika check-out paksa).');
+      }
+      if (oldStatus === 'Persiapan' && newStatus !== 'Tersedia' && newStatus !== 'Perbaikan') {
+        throw new Error('Kamar Persiapan hanya bisa diubah ke Tersedia atau Perbaikan.');
+      }
+
+      updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, found.rowIndex, { status_kamar: newStatus });
+      Logger.log('Room ' + idKamar + ': ' + oldStatus + ' → ' + newStatus + ' by ' + user.nama);
+
+      return successResponse({
+        kode_kamar: idKamar,
+        old_status: oldStatus,
+        new_status: newStatus,
+        nama_kamar: found.data.nama_kamar
+      }, '✅ Status kamar ' + found.data.nama_kamar + ' berhasil diubah: ' + oldStatus + ' → ' + newStatus);
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function getAllMonitoringData() {
+  try {
+    var user = getActiveUserSession();
+    
+    var kamarData = getCachedSheetData(CONFIG.SHEETS.MASTER_KAMAR, 30);
+    var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+    var transaksiData = getCachedSheetData(CONFIG.SHEETS.TRANSAKSI_KOS, 30);
+    var persiapanData = getCachedSheetData(CONFIG.SHEETS.PERSIAPAN_KAMAR, 30);
+    
+    // Map transaksi aktif per kamar
+    var activeTrx = {};
+    transaksiData.forEach(function(t) {
+      if (t.status === 'Active') {
+        activeTrx[t.kode_kamar] = t;
+      }
+    });
+    
+    // Map nama kos
+    var kosMap = {};
+    kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+    
+    // Stat global
+    var total = kamarData.length;
+    var available = 0, preparation = 0, occupied = 0, maintenance = 0;
+    var activeTransactions = transaksiData.filter(function(d) { return d.status === 'Active'; }).length;
+    var pendingPrep = persiapanData.filter(function(d) { return d.status === 'Pending' || d.status === 'In Progress'; }).length;
+    
+    // Group kamar by kos + build detail
+    var kosSections = [];
+    var kosGroup = {};
+    
+    kosData.forEach(function(k) {
+      kosGroup[k.kode_kos] = {
+        kode_kos: k.kode_kos,
+        nama_kos: k.nama_kos,
+        total: 0, available: 0, preparation: 0, occupied: 0, maintenance: 0,
+        kamarList: []
+      };
+    });
+    
+    kamarData.forEach(function(kmr) {
+      var group = kosGroup[kmr.kode_kos];
+      if (!group) return;
+      group.total++;
+      switch (kmr.status_kamar) {
+        case 'Tersedia': group.available++; available++; break;
+        case 'Persiapan': group.preparation++; preparation++; break;
+        case 'Terisi': group.occupied++; occupied++; break;
+        case 'Perbaikan': group.maintenance++; maintenance++; break;
+      }
+      
+      var trx = activeTrx[kmr.kode_kamar];
+      group.kamarList.push({
+        kode_kamar: kmr.kode_kamar,
+        nama_kamar: kmr.nama_kamar,
+        tipe_kamar: kmr.tipe_kamar,
+        harga_sewa: kmr.harga_sewa,
+        status_kamar: kmr.status_kamar,
+        tamu_aktif: trx ? trx.nama_tamu : '',
+        check_in: trx ? formatDateId(trx.check_in) : '',
+        rencana_check_out: trx ? formatDateId(trx.rencana_check_out) : ''
+      });
+    });
+    
+    kosSections = Object.values(kosGroup);
+    
+    return successResponse({
+      kosSections: kosSections,
+      total: total,
+      available: available,
+      preparation: preparation,
+      occupied: occupied,
+      maintenance: maintenance,
+      activeTransactions: activeTransactions,
+      pendingPrep: pendingPrep
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function globalSearch(query) {
+  try {
+    var user = getActiveUserSession();
+    if (!query || query.length < 2) return successResponse({ tiket: [], kamar: [], transaksi: [], user: [] });
+
+    var q = query.toLowerCase().trim();
+
+    // ─── 1. Cari Tiket Komplain ───────────────────────────
+    var tiketResults = [];
+    try {
+      var mainData = getSheetData(CONFIG.SHEETS.MAIN_DATA);
+      mainData.forEach(function(d) {
+        var tiketId = (d.tiket_id || '').toLowerCase();
+        var nama = (d.nama_customer || '').toLowerCase();
+        var lokasi = (d.lokasi || '').toLowerCase();
+        var deskripsi = (d.deskripsi || '').toLowerCase();
+        if (tiketId.indexOf(q) >= 0 || nama.indexOf(q) >= 0 || lokasi.indexOf(q) >= 0 || deskripsi.indexOf(q) >= 0) {
+          tiketResults.push({
+            type: 'tiket',
+            id: d.tiket_id,
+            label: d.tiket_id + ' — ' + (d.nama_customer || ''),
+            sub: 'Lokasi: ' + (d.lokasi || '-') + ' | Status: ' + (d.status || ''),
+            status: d.status,
+            page: 'maintenance'
+          });
+        }
+      });
+    } catch (e) { Logger.log('Search tiket error: ' + e.message); }
+
+    // ─── 2. Cari Kamar Kos ────────────────────────────────
+    var kamarResults = [];
+    try {
+      var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+      var kosMap = {};
+      kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+      
+      var kamarData = getSheetData(CONFIG.SHEETS.MASTER_KAMAR);
+      kamarData.forEach(function(d) {
+        var nomor = (d.nama_kamar || '').toLowerCase();
+        var tipe = (d.tipe_kamar || '').toLowerCase();
+        if (nomor.indexOf(q) >= 0 || tipe.indexOf(q) >= 0) {
+          kamarResults.push({
+            type: 'kamar',
+            id: d.kode_kamar,
+            label: (kosMap[d.kode_kos] || '-') + ' — Kamar ' + d.nama_kamar,
+            sub: 'Tipe: ' + (d.tipe_kamar || '-') + ' | Status: ' + (d.status_kamar || ''),
+            status: d.status_kamar,
+            page: 'roomstatus'
+          });
+        }
+      });
+    } catch (e) { Logger.log('Search kamar error: ' + e.message); }
+
+    // ─── 3. Cari Transaksi Kos ────────────────────────────
+    var trxResults = [];
+    try {
+      var transaksiData = getSheetData(CONFIG.SHEETS.TRANSAKSI_KOS);
+      transaksiData.forEach(function(d) {
+        var nama = (d.nama_tamu || '').toLowerCase();
+        var wa = (d.no_wa_tamu || '').toLowerCase();
+        if (nama.indexOf(q) >= 0 || wa.indexOf(q) >= 0) {
+          trxResults.push({
+            type: 'transaksi',
+            id: d.id_transaksi,
+            label: d.nama_tamu + ' (' + (d.no_wa_tamu || '-') + ')',
+            sub: 'Status: ' + (d.status || '-') + ' | Check-in: ' + (d.check_in || '-'),
+            status: d.status,
+            page: 'kostrx'
+          });
+        }
+      });
+    } catch (e) { Logger.log('Search transaksi error: ' + e.message); }
+
+    // ─── 4. Cari User ─────────────────────────────────────
+    var userResults = [];
+    try {
+      var userData = getCachedSheetData(CONFIG.SHEETS.USER_LIST, 600);
+      userData.forEach(function(d) {
+        var nama = (d.nama || '').toLowerCase();
+        var email = (d.email || '').toLowerCase();
+        var tim = (d.tim || '').toLowerCase();
+        if (nama.indexOf(q) >= 0 || email.indexOf(q) >= 0 || tim.indexOf(q) >= 0) {
+          userResults.push({
+            type: 'user',
+            id: d.user_id || d.email,
+            label: d.nama + ' (' + (d.email || '') + ')',
+            sub: 'Role: ' + (d.role || '-') + ' | Tim: ' + (d.tim || '-'),
+            status: d.status,
+            page: ''
+          });
+        }
+      });
+    } catch (e) { Logger.log('Search user error: ' + e.message); }
+
+    var total = tiketResults.length + kamarResults.length + trxResults.length + userResults.length;
+
+    return successResponse({
+      total: total,
+      tiket: tiketResults.slice(0, 10),
+      kamar: kamarResults.slice(0, 10),
+      transaksi: trxResults.slice(0, 10),
+      user: userResults.slice(0, 10)
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+/**
+ * [TRANSAKSI KOS] Check-in: buat transaksi + status kamar → Terisi
+ */
+function checkInKos(payload) {
+  try {
+    var user = getActiveUserSession();
+
+    if (!payload.kode_kamar || !payload.nama_tamu || !payload.check_in) {
+      throw new Error('Kamar, nama tamu, dan tanggal check-in wajib diisi.');
+    }
+
+    return withLock(function() {
+      // Validasi kamar tersedia
+      var kamarFound = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', payload.kode_kamar);
+      if (!kamarFound) throw new Error('Kamar tidak ditemukan.');
+      if (kamarFound.data.status_kamar !== 'Tersedia') {
+        throw new Error('Kamar sedang tidak tersedia. Status saat ini: ' + kamarFound.data.status_kamar);
+      }
+
+      var sheet = getSheet(CONFIG.SHEETS.TRANSAKSI_KOS);
+      var id = generateId('TRX');
+      
+      sheet.appendRow([
+        id,
+        payload.kode_kamar,
+        kamarFound.data.kode_kos,
+        payload.nama_tamu,
+        payload.no_wa_tamu || '',
+        payload.check_in,
+        payload.rencana_check_out || '',
+        '',               // check_out_aktual
+        payload.total_bayar || '0',
+        'Active',         // status
+        payload.catatan || '',
+        now()             // timestamp
+      ]);
+
+      // Update status kamar → Terisi
+      updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, kamarFound.rowIndex, { status_kamar: 'Terisi' });
+
+      return successResponse({ id_transaksi: id }, 'Check-in berhasil! ' + payload.nama_tamu + ' — Kamar ' + kamarFound.data.nama_kamar);
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+/**
+ * [TRANSAKSI KOS] Check-out: selesaikan transaksi + auto-create persiapan kamar + notif WA
+ */
+function checkOutKos(idTransaksi, checkOutDate, catatan) {
+  try {
+    var user = getActiveUserSession();
+
+    if (!idTransaksi) throw new Error('ID transaksi wajib diisi.');
+
+    return withLock(function() {
+      var found = findRow(CONFIG.SHEETS.TRANSAKSI_KOS, 'id_transaksi', idTransaksi);
+      if (!found) throw new Error('Transaksi tidak ditemukan.');
+      if (found.data.status !== 'Active') throw new Error('Transaksi sudah tidak aktif.');
+
+      var tglCheckout = checkOutDate || nowFormatted();
+      
+      updateRowCells(CONFIG.SHEETS.TRANSAKSI_KOS, found.rowIndex, {
+        check_out_aktual: tglCheckout,
+        status: 'Completed',
+        catatan: catatan || found.data.catatan || ''
+      });
+
+      // Update status kamar → Persiapan (perlu dibersihkan)
+      var kamarFound = findRow(CONFIG.SHEETS.MASTER_KAMAR, 'kode_kamar', found.data.kode_kamar);
+      if (!kamarFound) throw new Error('Kamar tidak ditemukan.');
+      
+      updateRowCells(CONFIG.SHEETS.MASTER_KAMAR, kamarFound.rowIndex, { status_kamar: 'Persiapan' });
+      
+      // Auto-create persiapan kamar
+      var prepSheet = getSheet(CONFIG.SHEETS.PERSIAPAN_KAMAR);
+      var prepId = generateId('PREP');
+      
+      prepSheet.appendRow([
+        prepId,
+        found.data.kode_kamar,
+        kamarFound.data.kode_kos,
+        'After Check-out',
+        '',  // assigned_to — dikosongkan, nanti staff ambil sendiri
+        'Pending',
+        'Auto dari check-out tamu ' + (found.data.nama_tamu || '') + '. ' + (catatan || ''),
+        now(),
+        ''
+      ]);
+      Logger.log('Auto-created preparation task: ' + prepId);
+      
+      // Notif WA ke staff housekeeping
+      try {
+        var staffList = getCachedSheetData(CONFIG.SHEETS.USER_LIST, 600);
+        var kosData = getCachedSheetData(CONFIG.SHEETS.MASTER_KOS, 1800);
+        var kosMap = {};
+        kosData.forEach(function(k) { kosMap[k.kode_kos] = k.nama_kos; });
+        
+        var namaKos = kosMap[kamarFound.data.kode_kos] || '-';
+        
+        staffList.forEach(function(s) {
+          if (s.tim === 'Housekeeping' && s.status === 'Aktif' && s.no_wa) {
+            sendRoomCleaningNotification(
+              s.no_wa, s.nama, kamarFound.data.nama_kamar, namaKos,
+              found.data.nama_tamu, catatan || ''
+            );
+          }
+        });
+      } catch (waErr) {
+        Logger.log('WA notification error: ' + waErr.message);
+      }
+
+      return successResponse({ id_persiapan: prepId }, 'Check-out berhasil! Tugas pembersihan otomatis dibuat.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}

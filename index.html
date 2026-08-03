@@ -841,6 +841,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <span class="nav-icon">&#x1F4CA;</span>
         <span class="nav-text">KPI Housekeeping</span>
       </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('masterlokasi', this)">
+        <span class="nav-icon">&#x1F4CD;</span>
+        <span class="nav-text">Master Lokasi</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('tracker', this)">
+        <span class="nav-icon">&#x1F4CA;</span>
+        <span class="nav-text">Cleaning Tracker</span>
+      </a>
 
       <!-- Kos Management -->
       <div class="nav-section">Kos Management</div>
@@ -869,6 +877,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <span class="nav-icon">&#x1F504;</span>
         <span class="nav-text">Status Kamar</span>
       </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('kostrx', this)">
+        <span class="nav-icon">&#x1F4CB;</span>
+        <span class="nav-text">Transaksi Kos</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('kosprep', this)">
+        <span class="nav-icon">&#x1F9F9;</span>
+        <span class="nav-text">Persiapan Kamar</span>
+      </a>
 
       <!-- Administrasi -->
       <div class="nav-section">Administrasi</div>
@@ -883,6 +899,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <a class="nav-item" href="javascript:void(0)" onclick="showPage('settings', this)">
         <span class="nav-icon">&#x2699;</span>
         <span class="nav-text">Pengaturan</span>
+      </a>
+      <a class="nav-item" href="javascript:void(0)" onclick="showPage('globalsearch', this)">
+        <span class="nav-icon">&#x1F50D;</span>
+        <span class="nav-text">Pencarian Global</span>
       </a>
     </div>
     <div class="sidebar-footer">
@@ -993,6 +1013,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <script src="src/data-crud.js?v=2"></script>
 <script src="src/users.js?v=2"></script>
 <script src="src/public.js?v=2"></script>
+<script src="src/legacy-pages.js?v=2"></script>
 <script>
 (function() {
   // Init dark mode from localStorage

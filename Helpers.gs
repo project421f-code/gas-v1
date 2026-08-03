@@ -38,7 +38,10 @@ var CONFIG = {
     MASTER_KOS:         'Master_Kos',
     MASTER_KAMAR:       'Master_Kamar',
     GUEST_BOOKING:      'Guest_Booking',
-    ROOM_STATUS_LOG:    'Room_Status_Log'
+    ROOM_STATUS_LOG:    'Room_Status_Log',
+    MASTER_LOKASI:      'Master_Lokasi',
+    PERSIAPAN_KAMAR:    'Persiapan_Kamar',
+    TRANSAKSI_KOS:      'Transaksi_Kos'
   },
 
   ROLES: {
@@ -1359,3 +1362,267 @@ function handleIncomingWhatsApp(payload) {
 }
 
 
+
+
+function getWebhookStatus() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var token = getSetting('WA_API_TOKEN');
+    var scriptUrl = ScriptApp.getService().getUrl();
+    var lastSummary = cache.get('webhook_last_summary');
+    var lastTime = cache.get('webhook_last_time');
+
+    return {
+      wa_token_configured: !!token,
+      wa_token_preview: token ? token.substring(0, 6) + '...' + token.slice(-4) : null,
+      web_app_url: scriptUrl,
+      webhook_url: scriptUrl, // URL yang sama untuk doPost()
+      last_webhook: lastSummary ? JSON.parse(lastSummary) : null,
+      last_webhook_time: lastTime ? new Date(parseInt(lastTime, 10)).toLocaleString('id-ID') : null,
+      spreadsheet_id: CONFIG.SPREADSHEET_ID,
+      timezone: CONFIG.TIMEZONE
+    };
+  } catch (e) {
+    Logger.log('getWebhookStatus Error: ' + e.message);
+    return { error: e.message };
+  }
+}
+
+function cacheWebhookPayload(payload, action, result) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var summary = {
+      time: nowFormatted(),
+      sender: payload.sender || '(unknown)',
+      name: payload.name || '(unknown)',
+      message_preview: (payload.message || '').substring(0, 150),
+      action: action || 'received',
+      result: result || 'ok'
+    };
+    // Hanya cache info penting, bukan payload mentah yang besar
+    cache.put('webhook_last_summary', JSON.stringify(summary), 600); // 10 menit
+    cache.put('webhook_last_time', String(new Date().getTime()), 600);
+    Logger.log('Webhook cached: ' + JSON.stringify(summary));
+  } catch (cacheErr) {
+    Logger.log('Cache webhook error: ' + cacheErr.message);
+  }
+}
+
+function sendTicketConfirmation(phone, customerName, ticketId, kategori) {
+  var message = '✅ *Laporan Diterima*\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n\n' +
+    'Halo *' + (customerName || 'Customer') + '*,\n\n' +
+    'Laporan Anda telah tercatat di sistem kami.\n\n' +
+    '🆔 *ID Tiket:* ' + ticketId + '\n' +
+    '📂 *Kategori:* ' + (kategori || 'Lainnya') + '\n\n' +
+    '⏱️ Tim teknis kami akan segera menindaklanjuti laporan Anda.\n' +
+    'Simpan ID tiket untuk referensi.\n' +
+    'Terima kasih! 🙏\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    CONFIG.ORG_NAME;
+
+  return sendWhatsApp(phone, message);
+}
+
+function detectComplaintCategory(text) {
+  if (!text) return 'Lainnya';
+  
+  var t = text.toLowerCase().trim();
+  
+  // Mapping keyword → kategori (prioritas: pertama cocok = digunakan)
+  var keywords = [
+    // Electrical
+    { words: ['listrik', 'lampu', 'stopkontak', 'saklar', 'kabel', 'colokan', 'mati lampu', 'led', 'flicker', 'korsleting', 'korslet', 'setrum', 'strum'], cat: 'Electrical' },
+    // Plumbing
+    { words: ['pipa', 'kran', 'air', 'bocor', 'wc', 'toilet', 'saluran', 'mampet', 'tiris', 'bak', 'wastafel', 'shower', 'septik', 'rembes'], cat: 'Plumbing' },
+    // AC/HVAC
+    { words: ['ac', 'hvac', 'pendingin', 'panas', 'suhu', 'ac/hvac', 'freon', 'kompresor', 'blower', 'fan', 'kipas', 'thermostat', 'cooling'], cat: 'AC/HVAC' },
+    // Furniture
+    { words: ['meja', 'kursi', 'lemari', 'furniture', 'sofa', 'kamar', 'pintu', 'jendela', 'ranjang', 'bed', 'laci', 'rak', 'gorden', 'tirai'], cat: 'Furniture' },
+    // IT/Network
+    { words: ['it', 'network', 'jaringan', 'wifi', 'komputer', 'laptop', 'printer', 'internet', 'lan', 'kabel data', 'cctv', 'mouse', 'keyboard', 'monitor'], cat: 'IT/Network' },
+    // General Building
+    { words: ['dinding', 'lantai', 'plafon', 'genteng', 'atap', 'gedung', 'bangunan', 'pagar', 'cat', 'tembok', 'ubin', 'keramik', 'gagang', 'kunci'], cat: 'Lainnya' }
+  ];
+  
+  for (var i = 0; i < keywords.length; i++) {
+    var group = keywords[i];
+    for (var j = 0; j < group.words.length; j++) {
+      if (t.indexOf(group.words[j]) >= 0) {
+        Logger.log('detectComplaintCategory: text="' + text.substring(0, 50) + '" → ' + group.cat + ' (matched: "' + group.words[j] + '")');
+        return group.cat;
+      }
+    }
+  }
+  
+  return 'Lainnya';
+}
+
+function sendRoomCleaningNotification(phone, staffNama, nomorKamar, namaKos, tamuNama, catatan) {
+  var message = '🧹 *TUGAS PEMBERSIHAN KAMAR*\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n\n' +
+    'Halo *' + staffNama + '*,\n\n' +
+    'Ada tugas pembersihan kamar setelah check-out tamu.\n\n' +
+    '🚪 *Kamar:* ' + nomorKamar + '\n' +
+    '🏠 *Kos:* ' + namaKos + '\n' +
+    '👤 *Tamu Sebelumnya:* ' + tamuNama + '\n' +
+    (catatan ? '📝 *Catatan:* ' + catatan + '\n' : '') +
+    '\n⚡ Segera lakukan pembersihan agar kamar siap untuk tamu berikutnya.\n' +
+    'Terima kasih! 💪\n' +
+    '━━━━━━━━━━━━━━━━━━━━\n' +
+    CONFIG.ORG_NAME;
+
+  return sendWhatsApp(phone, message);
+}
+
+function uploadPhotoToDrive(base64Data, fileName) {
+  try {
+    if (!base64Data) throw new Error('Data foto kosong.');
+
+    // Ekstrak data base64 (handle prefix data:image/...;base64,)
+    var rawData = base64Data;
+    var mimeType = 'image/png'; // default
+    
+    if (base64Data.indexOf('base64,') >= 0) {
+      // Format: data:image/jpeg;base64,/9j/4AAQ...
+      var matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        mimeType = matches[1];
+        rawData = matches[2];
+      } else {
+        // Fallback: split manual
+        var parts = base64Data.split('base64,');
+        rawData = parts[parts.length - 1];
+        var mimeMatch = base64Data.match(/^data:([^;]+);/);
+        if (mimeMatch) mimeType = mimeMatch[1];
+      }
+    }
+
+    // Generate nama file jika kosong
+    if (!fileName || fileName.trim() === '') {
+      var ext = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? 'jpg' : 
+                mimeType === 'image/png' ? 'png' :
+                mimeType === 'image/gif' ? 'gif' :
+                mimeType === 'image/webp' ? 'webp' : 'png';
+      fileName = 'foto_perbaikan_' + Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyyMMdd_HHmmss') + '.' + ext;
+    }
+
+    // Decode base64 ke blob
+    var decoded = Utilities.base64Decode(rawData);
+    var blob = Utilities.newBlob(decoded, mimeType, fileName);
+
+    // Cari folder "GA_Operations_Photos", buat jika belum ada
+    var folderName = 'GA_Operations_Photos';
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder;
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder(folderName);
+      Logger.log('Created folder: ' + folderName);
+    }
+
+    // Buat file di folder
+    var file = folder.createFile(blob);
+    
+    // Set permission: Anyone with link can view
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    var fileUrl = file.getUrl();
+    
+    Logger.log('Photo uploaded: ' + fileName + ' → ' + fileUrl);
+
+    return successResponse({
+      url: fileUrl,
+      fileId: file.getId(),
+      fileName: fileName
+    }, 'Foto berhasil diupload.');
+
+  } catch (e) {
+    Logger.log('uploadPhotoToDrive Error: ' + e.message);
+    return errorResponse('Gagal upload foto: ' + e.message);
+  }
+}
+
+function sendFormatGuideOnce(sender) {
+  // Normalisasi nomor
+  var phone = normalizePhone(sender);
+  if (!phone) {
+    Logger.log('GUIDE-DEDUP: sender kosong, skip');
+    return false;
+  }
+
+  try {
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'guide_sent_' + phone;
+    var alreadySent = cache.get(cacheKey);
+
+    if (alreadySent === '1') {
+      Logger.log('GUIDE-DEDUP: Guide already sent to ' + phone + ' in last 2 hours. Skipping.');
+      return false;
+    }
+
+    // Kirim panduan
+    sendWhatsApp(phone, getComplaintFormatGuide());
+    
+    // Simpan ke cache (berlaku 2 jam)
+    cache.put(cacheKey, '1', 7200); // 7200 detik = 2 jam
+    
+    Logger.log('GUIDE-DEDUP: Guide sent to ' + phone + ', cached for 2 hours.');
+    return true;
+  } catch (e) {
+    // Jika cache error, tetap kirim guide (fail-safe)
+    Logger.log('GUIDE-DEDUP: Cache error for ' + phone + ': ' + e.message);
+    sendWhatsApp(phone, getComplaintFormatGuide());
+    return true;
+  }
+}
+
+function getCachedSheetData(sheetName, ttlSeconds) {
+  var cache = CacheService.getScriptCache();
+  var key = 'csd_' + sheetName.replace(/[^a-zA-Z0-9]/g, '_');
+  var cached = cache.get(key);
+  
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {
+      Logger.log('Cache parse error for ' + sheetName + ': ' + e.message + ' — membaca ulang.');
+    }
+  }
+  
+  // Cache miss — baca dari sheet
+  var data = getSheetData(sheetName);
+  
+  // Cache the result (max 21600 detik = 6 jam, atau gunakan ttl yang diberikan)
+  var maxTtl = Math.min(ttlSeconds || 300, 21600);
+  if (data.length > 0) {
+    cache.put(key, JSON.stringify(data), maxTtl);
+    Logger.log('CACHED: ' + sheetName + ' (' + data.length + ' rows, TTL=' + maxTtl + 's)');
+  }
+  
+  return data;
+}
+
+function applyPagination(data, limit, offset) {
+  var total = data.length;
+  var lim = limit && !isNaN(limit) ? Math.min(Math.max(parseInt(limit), 1), 500) : 0;
+  var off = offset && !isNaN(offset) ? Math.max(parseInt(offset), 0) : 0;
+  
+  var hasMore = false;
+  var paginatedData = data;
+  
+  if (lim > 0) {
+    var endIndex = off + lim;
+    hasMore = endIndex < total;
+    paginatedData = data.slice(off, endIndex);
+  }
+  
+  return {
+    paginatedData: paginatedData,
+    total: total,
+    limit: lim || total,
+    offset: off,
+    hasMore: hasMore
+  };
+}

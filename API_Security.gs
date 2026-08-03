@@ -547,3 +547,30 @@ function deletePatrolSchedule(idJadwal) {
  * Migrasi data Master_Patrol_Schedule ke Supabase
  */
 
+
+
+function getSecurityStaff() {
+  try {
+    var userData = getCachedSheetData(CONFIG.SHEETS.USER_LIST, 300);
+    var staff = userData.filter(function(d) {
+      return (d.tim === 'Security' || d.role === 'Staff') && d.status === 'Aktif';
+    }).map(function(d) {
+      return { nama: d.nama, tim: d.tim, no_wa: d.no_wa || '' };
+    });
+    return successResponse(staff);
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+function getPatrolScheduleById(idJadwal) {
+  try {
+    var user = getActiveUserSession();
+    if (!idJadwal) throw new Error('ID jadwal wajib diisi.');
+    var found = findRow(CONFIG.SHEETS.PATROL_SCHEDULE, 'id_jadwal', idJadwal);
+    if (!found) throw new Error('Jadwal tidak ditemukan.');
+    return successResponse(found.data);
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
