@@ -462,7 +462,8 @@ function executeAction(email, sessionToken, actionName, args) {
       'checkGoogleSSO',
       'getAppInfo',
       'getPublicAssetsAvailability',
-      'publicBooking'
+      'publicBooking',
+      'publicComplaint'
     ];
 
     // Jika bukan public action, validasi token

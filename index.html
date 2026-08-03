@@ -1011,6 +1011,16 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     }
     return;
   }
+  // Public complaint page (?page=complaint) — no login
+  if (params.page === 'complaint') {
+    hideLoading();
+    if (typeof initPublicComplaintPage === 'function') {
+      initPublicComplaintPage();
+    } else {
+      document.getElementById('main-content').innerHTML = '<div style="color:#64748b;text-align:center;padding:40px">Halaman komplain belum tersedia.</div>';
+    }
+    return;
+  }
   // Pulihkan sesi login (token GAS di localStorage, divalidasi ke server)
   restoreSession(function(ok) {
     if (ok) {
@@ -1404,6 +1414,149 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div class="pub-footer">
       &#x1F512; <a class="pub-login-link" onclick="showLoginScreen()">Login</a> untuk akses penuh &nbsp;|&nbsp; GA Operations System
     </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- PUBLIC COMPLAINT PAGE (?page=complaint) — no login     -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div id="public-complaint-page" style="display:none">
+  <style>
+    .pubc-body { max-width: 680px; margin: 0 auto; padding: 20px; }
+    .pubc-info-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.15); border-radius: 12px; padding: 14px 18px; color: #fcd34d; font-size: 0.82rem; }
+    .pubc-info-bar .icon { font-size: 1.2rem; }
+    .pubc-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; margin-bottom: 12px; }
+    .pubc-group { margin-bottom: 18px; }
+    .pubc-group:last-child { margin-bottom: 0; }
+    .pubc-label { display: block; color: #94a3b8; font-size: 0.78rem; font-weight: 500; margin-bottom: 6px; }
+    .pubc-label .required { color: #f87171; }
+    .pubc-input { width: 100%; padding: 12px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: #f1f5f9; font-family: var(--font); font-size: 0.9rem; outline: none; transition: all 0.25s ease; box-sizing: border-box; }
+    .pubc-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
+    .pubc-input::placeholder { color: #475569; }
+    textarea.pubc-input { min-height: 100px; resize: vertical; }
+    select.pubc-input { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px; }
+    select.pubc-input option { background: #1e293b; color: #f1f5f9; }
+    .pubc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .pubc-grid .full { grid-column: 1 / -1; }
+    .pubc-hint { color: #475569; font-size: 0.72rem; margin-top: 4px; }
+    .pubc-urgensi { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pubc-urgensi-item { flex: 1; min-width: 100px; text-align: center; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.04); }
+    .pubc-urgensi-item:hover { border-color: rgba(255,255,255,0.2); }
+    .pubc-urgensi-item.selected { border-color: var(--primary); background: rgba(245,158,11,0.1); }
+    .pubc-urgensi-item .label { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
+    .pubc-urgensi-item .desc { font-size: 0.65rem; color: #64748b; }
+    .pubc-urgensi-item[data-value="Low"] .label { color: #34d399; }
+    .pubc-urgensi-item[data-value="Medium"] .label { color: #fbbf24; }
+    .pubc-urgensi-item[data-value="High"] .label { color: #f87171; }
+    .pubc-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-family: var(--font); font-size: 0.95rem; font-weight: 700; cursor: pointer; background: linear-gradient(135deg,var(--primary),var(--primary-light)); color: #1e293b; transition: all 0.2s; margin-top: 8px; }
+    .pubc-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(245,158,11,0.3); }
+    .pubc-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .pubc-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; padding: 12px 16px; color: #fca5a5; font-size: 0.82rem; display: none; margin-bottom: 16px; }
+    .pubc-error.show { display: block; }
+    .pubc-success { display: none; text-align: center; padding: 40px 20px; }
+    .pubc-success.show { display: block; }
+    .pubc-success-icon { width: 72px; height: 72px; margin: 0 auto 16px; background: rgba(16,185,129,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; animation: success-pop 0.5s ease; }
+    .pubc-success-title { font-size: 1.3rem; font-weight: 700; color: #34d399; margin-bottom: 8px; }
+    .pubc-success-id { font-size: 0.95rem; color: #94a3b8; margin-bottom: 20px; }
+    .pubc-success-id strong { color: #fbbf24; font-size: 1.3rem; letter-spacing: 1px; }
+    .pubc-success-info { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 20px; text-align: left; margin-bottom: 20px; }
+    .pubc-success-info div { display: flex; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .pubc-success-info div:last-child { border-bottom: none; }
+    .pubc-success-info .lbl { color: #64748b; font-size: 0.78rem; font-weight: 500; width: 100px; flex-shrink: 0; }
+    .pubc-success-info .val { color: #e0e7ff; font-size: 0.85rem; }
+    @media (max-width: 600px) {
+      .pubc-body { padding: 14px; }
+      .pubc-grid { grid-template-columns: 1fr; }
+      .pubc-card { padding: 16px; }
+      .pubc-urgensi-item { min-width: 80px; }
+    }
+  </style>
+  <div class="pub-header">
+    <div class="pub-logo">&#x1F527;</div>
+    <div class="pub-title">Lapor Komplain &amp; Perbaikan</div>
+    <div class="pub-subtitle">Laporkan kerusakan fasilitas, AC, listrik, dan lainnya</div>
+  </div>
+  <div class="pubc-body">
+    <div class="pubc-info-bar">
+      <div class="icon">&#x2139;&#xFE0F;</div>
+      <div>Setelah dikirim, tim Maintenance kami akan segera memproses laporan Anda. Simpan ID tiket untuk tracking.</div>
+    </div>
+
+    <div id="pubc-form-container">
+      <div class="pubc-card">
+        <div class="pubc-error" id="pubc-error"></div>
+        <div class="pubc-grid">
+          <div class="pubc-group full">
+            <label class="pubc-label">Nama Lengkap <span class="required">*</span></label>
+            <input type="text" class="pubc-input" id="pubc-nama" placeholder="Masukkan nama Anda">
+          </div>
+          <div class="pubc-group">
+            <label class="pubc-label">No. WhatsApp <span class="required">*</span></label>
+            <input type="text" class="pubc-input" id="pubc-wa" placeholder="628xxx">
+          </div>
+          <div class="pubc-group">
+            <label class="pubc-label">Lokasi <span class="required">*</span></label>
+            <input type="text" class="pubc-input" id="pubc-lokasi" placeholder="Contoh: Lt.2 Ruang Meeting">
+          </div>
+          <div class="pubc-group">
+            <label class="pubc-label">Kategori <span class="required">*</span></label>
+            <select class="pubc-input" id="pubc-kategori" onchange="onPubcKategoriChange()">
+              <option value="">-- Pilih Kategori --</option>
+              <option value="Plumbing">&#x1F6B0; Plumbing (Pipa, Keran, Toilet)</option>
+              <option value="Electrical">&#x26A1; Electrical (Lampu, Stop Kontak)</option>
+              <option value="AC/HVAC">&#x2744;&#xFE0F; AC / HVAC</option>
+              <option value="Furniture">&#x1F4BA; Furniture (Meja, Kursi, Pintu)</option>
+              <option value="IT/Network">&#x1F4F6; IT / Network (WiFi, Printer)</option>
+              <option value="Lainnya">&#x1F4A1; Lainnya</option>
+            </select>
+          </div>
+          <div class="pubc-group">
+            <label class="pubc-label">Sub Kategori</label>
+            <input type="text" class="pubc-input" id="pubc-subkategori" placeholder="Contoh: AC Tidak Dingin">
+            <div class="pubc-hint" id="pubc-subkategori-hint">Mulai ketik atau pilih dari saran</div>
+          </div>
+        </div>
+        <div class="pubc-group">
+          <label class="pubc-label">Urgensi <span class="required">*</span></label>
+          <div class="pubc-urgensi" id="pubc-urgensi">
+            <div class="pubc-urgensi-item" data-value="Low" onclick="selectPubcUrgensi(this)">
+              <div class="label">&#x1F7E2; Low</div>
+              <div class="desc">Tidak kritis</div>
+            </div>
+            <div class="pubc-urgensi-item selected" data-value="Medium" onclick="selectPubcUrgensi(this)">
+              <div class="label">&#x1F7E1; Medium</div>
+              <div class="desc">Perlu penanganan</div>
+            </div>
+            <div class="pubc-urgensi-item" data-value="High" onclick="selectPubcUrgensi(this)">
+              <div class="label">&#x1F534; High</div>
+              <div class="desc">Darurat / kritis</div>
+            </div>
+          </div>
+        </div>
+        <div class="pubc-group">
+          <label class="pubc-label">Deskripsi Masalah <span class="required">*</span></label>
+          <textarea class="pubc-input" id="pubc-deskripsi" placeholder="Jelaskan masalah yang Anda alami secara detail..."></textarea>
+        </div>
+      </div>
+      <button class="pubc-btn" id="pubc-btn" onclick="submitPublicComplaint()">
+        <span class="icon">&#x1F4E8;</span> Kirim Laporan
+      </button>
+    </div>
+
+    <div class="pubc-success" id="pubc-success">
+      <div class="pubc-success-icon">&#x2705;</div>
+      <div class="pubc-success-title">Laporan Terkirim!</div>
+      <div class="pubc-success-id">ID Tiket: <strong id="pubc-tiket-id">-</strong></div>
+      <div class="pubc-success-info">
+        <div><span class="lbl">Nama</span><span class="val" id="pubc-success-nama"></span></div>
+        <div><span class="lbl">Kategori</span><span class="val" id="pubc-success-kategori"></span></div>
+        <div><span class="lbl">Lokasi</span><span class="val" id="pubc-success-lokasi"></span></div>
+        <div><span class="lbl">Status</span><span class="val" style="color:#fbbf24">&#x1F7E1; Open</span></div>
+        <div><span class="lbl">Estimasi</span><span class="val" id="pubc-success-estimasi"></span></div>
+      </div>
+      <button class="pubc-btn" onclick="resetPublicComplaint()">&#x1F504; Buat Laporan Baru</button>
+    </div>
+    <div class="pub-footer">GA Operations &bull; General Affair &bull; Maintenance</div>
   </div>
 </div>
 

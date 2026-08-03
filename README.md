@@ -88,7 +88,7 @@ Ringkasnya (repo Anda: `github.com/project421f-code/gas-v1`):
 4. Login `admin@ga.com` / `ga2026` → menu **Pengaturan** → isi **URL Web App GAS** (dari Langkah 2) → Simpan.
    - URL ini disimpan di `localStorage` browser. Setiap user yang login pertama kali perlu mengisinya (atau di-hardcode di `src/gas.js` → `GAS_APP_URL`).
 
-> ⚠️ **Jangan host `public.html` & `public-complaint.html`** — keduanya masih berisi kode Supabase lama. Halaman publik yang aktif: `index.html?page=public` (backend GAS, tanpa login). Halaman komplain publik belum dimigrasi. Jangan commit `_setup_wa_token.gs` (token Fonnte bocor — jalankan `git reset -- _setup_wa_token.gs` setelah `git add *.gs`).
+> ⚠️ **Jangan host `public.html` & `public-complaint.html`** — keduanya masih berisi kode Supabase lama. Halaman publik yang aktif: `index.html?page=public` (booking aset) dan `index.html?page=complaint` (komplain) — keduanya backend GAS, tanpa login. Jangan commit `_setup_wa_token.gs` (token Fonnte bocor — jalankan `git reset -- _setup_wa_token.gs` setelah `git add *.gs`).
 
 ---
 

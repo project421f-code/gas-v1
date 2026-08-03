@@ -168,6 +168,84 @@ function saveComplaint(payload) {
 }
 
 /**
+ * Buat tiket komplain dari HALAMAN PUBLIK (?page=complaint) — tanpa login.
+ * Sama seperti saveComplaint CREATE path, tapi tidak memerlukan sesi user.
+ */
+function publicComplaint(payload) {
+  try {
+    if (!payload || !payload.nama_customer || !payload.lokasi || !payload.deskripsi || !payload.kategori || !payload.urgensi) {
+      throw new Error('Nama, lokasi, deskripsi, kategori, dan urgensi wajib diisi.');
+    }
+    if (!payload.no_wa) throw new Error('Nomor WhatsApp wajib diisi.');
+
+    return withLock(function() {
+      var sheet = getSheet(CONFIG.SHEETS.MAIN_DATA);
+
+      // Ambil target SLA dari Master_SLA
+      var targetSLA = lookupSLA(payload.kategori, payload.sub_kategori || '', payload.urgensi);
+
+      // Generate tiket ID berurutan (TC-2026-001)
+      var tiketId = generateSequentialId('TC', CONFIG.SHEETS.MAIN_DATA, 'tiket_id');
+
+      // Normalisasi nomor WA sebelum disimpan (force string, hindari scientific notation)
+      var cleanPhone = normalizePhone(payload.no_wa);
+
+      sheet.appendRow([
+        now(),                         // timestamp
+        tiketId,                       // tiket_id
+        cleanPhone,                    // no_wa (sudah string bersih)
+        payload.nama_customer,         // nama_customer
+        payload.lokasi,                // lokasi
+        payload.deskripsi,             // deskripsi
+        payload.foto_kerusakan || '',  // foto_kerusakan
+        payload.kategori,              // kategori
+        payload.sub_kategori || '',    // sub_kategori
+        payload.urgensi,               // urgensi
+        targetSLA,                     // target_sla_jam
+        CONFIG.STATUS.OPEN,            // status
+        '',                            // teknisi
+        '',                            // foto_perbaikan
+        '',                            // catatan
+        '',                            // waktu_selesai
+        '',                            // durasi_jam
+        '',                            // status_sla
+        ''                             // rating_survei
+      ]);
+
+      // Force format kolom no_wa sebagai teks agar Google Sheets tidak mengkonversi ke number
+      try {
+        var noWaColIndex = 3; // Kolom C = no_wa
+        sheet.getRange(sheet.getLastRow(), noWaColIndex).setNumberFormat('@');
+      } catch (fmtErr) {
+        Logger.log('Format kolom no_wa error: ' + fmtErr.message);
+      }
+
+      // ─── WA NOTIFICATION ────────────────────────────
+      // Kirim notifikasi ke customer jika ada nomor WA
+      if (cleanPhone) {
+        try {
+          sendNewTicketNotification(
+            cleanPhone,
+            tiketId,
+            payload.nama_customer,
+            payload.kategori,
+            payload.urgensi,
+            payload.lokasi,
+            payload.deskripsi
+          );
+        } catch (waErr) {
+          Logger.log('WA Public New Ticket Notification Error: ' + waErr.message);
+        }
+      }
+
+      return successResponse({ tiket_id: tiketId }, 'Tiket "' + tiketId + '" berhasil dibuat.');
+    });
+  } catch (e) {
+    return errorResponse(e.message);
+  }
+}
+
+/**
  * Update status tiket & assign teknisi
  */
 function updateComplaintStatus(tiketId, newStatus, assignData) {

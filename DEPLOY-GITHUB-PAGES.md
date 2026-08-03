@@ -28,7 +28,7 @@ src/              ← semua file JS (gas.js, auth.js, dashboard.js, dll.)
 
 CDN (Chart.js, html5-qrcode, qrcode, Google Fonts) dimuat langsung dari internet — **tidak perlu di-upload**. File `.gs` tidak di-host; itu hanya backup di repo.
 
-> ⚠️ **JANGAN host `public.html` dan `public-complaint.html`** — kedua file lama ini masih berisi kode Supabase (CDN + URL + query langsung) dan **tidak akan berfungsi** tanpa Supabase. Halaman publik yang aktif adalah `index.html?page=public` (backend GAS). Halaman komplain publik belum dimigrasi (lihat Langkah 7).
+> ⚠️ **JANGAN host `public.html` dan `public-complaint.html`** — kedua file lama ini masih berisi kode Supabase (CDN + URL + query langsung) dan **tidak akan berfungsi** tanpa Supabase. Halaman publik yang aktif: `index.html?page=public` (booking) dan `index.html?page=complaint` (komplain) — keduanya backend GAS.
 
 ---
 
@@ -97,10 +97,9 @@ Setelah situs live, hubungkan ke backend:
 ## 7. Halaman publik (tanpa login)
 
 - **Booking aset:** `https://project421f-code.github.io/gas-v1/?page=public`
+- **Komplain / perbaikan:** `https://project421f-code.github.io/gas-v1/?page=complaint`
 
-Halaman ini memanggil aksi GAS publik (`getPublicAssetsAvailability`, `publicBooking`) — **tidak butuh login**. Backend harus di-deploy dengan akses **Anyone** (sudah: `ANYONE_ANONYMOUS` di `appsscript.json`).
-
-> ℹ️ Halaman komplain publik **belum dimigrasi** dari `public-complaint.html` (yang masih Supabase). Jika dibutuhkan, buat halaman `?page=complaint` di `index.html` memakai `src/public.js` + aksi GAS publik (`saveComplaint` sudah menerima input publik).
+Kedua halaman ini memanggil aksi GAS publik (`getPublicAssetsAvailability`, `publicBooking`, `publicComplaint`) — **tidak butuh login**. Backend harus di-deploy dengan akses **Anyone** (sudah: `ANYONE_ANONYMOUS` di `appsscript.json`).
 
 ---
 
@@ -150,6 +149,6 @@ clasp deploy -i <DeploymentId> -d "update v2.0.1"   # URL /exec tetap sama
 ```bash
 git add -A && git commit -m "update" && git push origin master   # deploy frontend
 # Situs: https://project421f-code.github.io/gas-v1/
-# Publik: .../gas-v1/?page=public
+# Publik: .../gas-v1/?page=public  |  .../gas-v1/?page=complaint
 # Backend: clasp push + clasp deploy -i <DeploymentId>
 ```

@@ -178,3 +178,148 @@ function closePubModal() {
   var overlay = document.getElementById('modal-pub');
   if (overlay) overlay.classList.remove('show');
 }
+
+// ════════════════════════════════════════════════════════════
+// PUBLIC COMPLAINT PAGE — No login required (?page=complaint)
+// ════════════════════════════════════════════════════════════
+
+var _pubcUrgensi = 'Medium';
+var _pubcSubKategoriMap = {
+  'Plumbing': ['Keran Rusak', 'Pipa Bocor', 'Toilet Mampet'],
+  'Electrical': ['Lampu Mati', 'Stop Kontak Rusak', 'Korsleting'],
+  'AC/HVAC': ['AC Tidak Dingin', 'AC Bocor'],
+  'Furniture': ['Meja Rusak', 'Kursi Rusak', 'Pintu/Jendela Rusak'],
+  'IT/Network': ['WiFi Mati', 'Printer Rusak'],
+  'Lainnya': ['Lainnya']
+};
+
+function initPublicComplaintPage() {
+  hideLoading();
+  var el = document.getElementById('public-complaint-page');
+  if (el) el.style.display = 'block';
+
+  // Auto-fill WA dari URL param (?wa=628xxx)
+  var params = getUrlParams();
+  var waEl = document.getElementById('pubc-wa');
+  if (waEl && params.wa) waEl.value = params.wa;
+
+  // Reset form ke kondisi awal
+  resetPublicComplaint(false);
+}
+
+function onPubcKategoriChange() {
+  var kat = document.getElementById('pubc-kategori').value;
+  var hint = document.getElementById('pubc-subkategori-hint');
+  var subInput = document.getElementById('pubc-subkategori');
+
+  if (_pubcSubKategoriMap[kat]) {
+    hint.innerHTML = 'Saran: ' + _pubcSubKategoriMap[kat].join(', ');
+    if (!subInput.value) subInput.value = _pubcSubKategoriMap[kat][0];
+  } else {
+    hint.innerHTML = 'Ketik sub kategori';
+    subInput.value = '';
+  }
+}
+
+function selectPubcUrgensi(el) {
+  document.querySelectorAll('#pubc-urgensi .pubc-urgensi-item').forEach(function(e) { e.classList.remove('selected'); });
+  el.classList.add('selected');
+  _pubcUrgensi = el.getAttribute('data-value');
+}
+
+function showPubcError(msg) {
+  var el = document.getElementById('pubc-error');
+  if (el) {
+    el.textContent = '\u274C ' + msg;
+    el.classList.add('show');
+  }
+}
+
+async function submitPublicComplaint() {
+  var nama = document.getElementById('pubc-nama').value.trim();
+  var wa = document.getElementById('pubc-wa').value.trim();
+  var lokasi = document.getElementById('pubc-lokasi').value.trim();
+  var kategori = document.getElementById('pubc-kategori').value;
+  var subKategori = document.getElementById('pubc-subkategori').value.trim();
+  var deskripsi = document.getElementById('pubc-deskripsi').value.trim();
+  var errorEl = document.getElementById('pubc-error');
+  if (errorEl) errorEl.classList.remove('show');
+
+  if (!nama) { showPubcError('Nama lengkap wajib diisi.'); document.getElementById('pubc-nama').focus(); return; }
+  if (!wa) { showPubcError('Nomor WhatsApp wajib diisi.'); document.getElementById('pubc-wa').focus(); return; }
+  if (wa.length < 8) { showPubcError('Nomor WhatsApp minimal 8 digit.'); document.getElementById('pubc-wa').focus(); return; }
+  if (!lokasi) { showPubcError('Lokasi wajib diisi.'); document.getElementById('pubc-lokasi').focus(); return; }
+  if (!kategori) { showPubcError('Kategori wajib dipilih.'); document.getElementById('pubc-kategori').focus(); return; }
+  if (!deskripsi) { showPubcError('Deskripsi masalah wajib diisi.'); document.getElementById('pubc-deskripsi').focus(); return; }
+
+  var btn = document.getElementById('pubc-btn');
+  btn.disabled = true;
+  btn.innerHTML = '&#x23F3; Mengirim laporan...';
+
+  try {
+    // Kirim ke backend GAS (aksi publik, tanpa login) — SLA dihitung server-side
+    var data = await apiCall('publicComplaint', [{
+      nama_customer: nama,
+      no_wa: wa,
+      lokasi: lokasi,
+      deskripsi: deskripsi,
+      kategori: kategori,
+      sub_kategori: subKategori || kategori,
+      urgensi: _pubcUrgensi
+    }]);
+
+    var tiketId = (data && data.tiket_id) || '-';
+
+    // Estimasi SLA ditampilkan sesuai pilihan urgensi (server menghitung persisnya)
+    var slaJam = { 'Low': 48, 'Medium': 24, 'High': 8 }[_pubcUrgensi] || 24;
+
+    document.getElementById('pubc-tiket-id').textContent = tiketId;
+    document.getElementById('pubc-success-nama').textContent = nama;
+    document.getElementById('pubc-success-kategori').textContent = kategori + (subKategori && subKategori !== kategori ? ' \u2014 ' + subKategori : '');
+    document.getElementById('pubc-success-lokasi').textContent = lokasi;
+    document.getElementById('pubc-success-estimasi').textContent = 'Dalam ' + slaJam + ' jam (SLA)';
+
+    document.getElementById('pubc-form-container').style.display = 'none';
+    document.getElementById('pubc-success').classList.add('show');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="icon">&#x1F4E8;</span> Kirim Laporan';
+    showPubcError('Gagal mengirim: ' + e.message);
+    console.error(e);
+  }
+}
+
+function resetPublicComplaint(refillWa) {
+  var fields = ['pubc-nama', 'pubc-lokasi', 'pubc-subkategori', 'pubc-deskripsi'];
+  fields.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var kat = document.getElementById('pubc-kategori');
+  if (kat) kat.value = '';
+
+  document.querySelectorAll('#pubc-urgensi .pubc-urgensi-item').forEach(function(e) { e.classList.remove('selected'); });
+  var med = document.querySelector('#pubc-urgensi .pubc-urgensi-item[data-value="Medium"]');
+  if (med) med.classList.add('selected');
+  _pubcUrgensi = 'Medium';
+
+  var hint = document.getElementById('pubc-subkategori-hint');
+  if (hint) hint.innerHTML = 'Mulai ketik atau pilih dari saran';
+
+  // Re-fill WA dari URL (kecuali refillWa === false)
+  if (refillWa !== false) {
+    var params = getUrlParams();
+    var waEl = document.getElementById('pubc-wa');
+    if (waEl) waEl.value = params.wa || '';
+  }
+
+  var form = document.getElementById('pubc-form-container');
+  if (form) form.style.display = 'block';
+  var success = document.getElementById('pubc-success');
+  if (success) success.classList.remove('show');
+  var err = document.getElementById('pubc-error');
+  if (err) err.classList.remove('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
