@@ -11,3 +11,7 @@ supabase-arsip/cli/
 # ── Frontend legacy (google.script.run — tidak dipakai) ─────
 # Versi lama yang hanya jalan saat di-serve dari GAS.
 frontend/
+
+# ── Keamanan: token & file pribadi ─────────────────────────
+# _setup_wa_token.gs berisi token Fonnte hardcoded — JANGAN pernah di-commit.
+_setup_wa_token.gs
