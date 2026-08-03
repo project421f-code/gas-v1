@@ -270,8 +270,8 @@ async function submitPublicComplaint() {
 
     var tiketId = (data && data.tiket_id) || '-';
 
-    // Estimasi SLA ditampilkan sesuai pilihan urgensi (server menghitung persisnya)
-    var slaJam = { 'Low': 48, 'Medium': 24, 'High': 8 }[_pubcUrgensi] || 24;
+    // Estimasi SLA dari server (nilai aktual Master_SLA). Fallback ke pilihan urgensi.
+    var slaJam = (data && data.target_sla_jam) || { 'Low': 48, 'Medium': 24, 'High': 8 }[_pubcUrgensi] || 24;
 
     document.getElementById('pubc-tiket-id').textContent = tiketId;
     document.getElementById('pubc-success-nama').textContent = nama;

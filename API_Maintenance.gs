@@ -238,7 +238,7 @@ function publicComplaint(payload) {
         }
       }
 
-      return successResponse({ tiket_id: tiketId }, 'Tiket "' + tiketId + '" berhasil dibuat.');
+      return successResponse({ tiket_id: tiketId, target_sla_jam: targetSLA }, 'Tiket "' + tiketId + '" berhasil dibuat.');
     });
   } catch (e) {
     return errorResponse(e.message);

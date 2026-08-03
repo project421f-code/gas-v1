@@ -1420,8 +1420,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <!-- ════════════════════════════════════════════════════════ -->
 <!-- PUBLIC COMPLAINT PAGE (?page=complaint) — no login     -->
 <!-- ════════════════════════════════════════════════════════ -->
-<div id="public-complaint-page" style="display:none">
+<div id="public-complaint-page" class="pubc-page" style="display:none">
   <style>
+    /* Header styles self-contained (tidak bergantung style block halaman booking) */
+    .pubc-page .pub-header { background: linear-gradient(135deg, #0a0f1e, #1a1f3a); padding: 24px 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .pubc-page .pub-logo { width: 56px; height: 56px; background: linear-gradient(135deg,var(--primary),var(--primary-light)); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 1.3rem; font-weight: 800; color: white; }
+    .pubc-page .pub-title { font-size: 1.15rem; font-weight: 700; color: #f1f5f9; }
+    .pubc-page .pub-subtitle { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+    .pubc-page .pub-footer { text-align: center; padding: 20px; color: #475569; font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 30px; }
     .pubc-body { max-width: 680px; margin: 0 auto; padding: 20px; }
     .pubc-info-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.15); border-radius: 12px; padding: 14px 18px; color: #fcd34d; font-size: 0.82rem; }
     .pubc-info-bar .icon { font-size: 1.2rem; }
