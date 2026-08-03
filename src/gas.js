@@ -10,15 +10,17 @@
 //
 // CARA SETUP (sekali):
 // 1. Deploy GAS sebagai Web App ("Anyone" / Siapa saja)
-// 2. Salin URL Web App → tempel di menu Pengaturan → "URL Web App GAS"
-//    (disimpan di localStorage key 'ga_app_url')
+// 2. URL default sudah di-hardcode di bawah. Bila URL berubah,
+//    update GAS_APP_URL ATAU tempel URL baru di menu Pengaturan
+//    → "URL Web App GAS" (disimpan di localStorage key 'ga_app_url',
+//    lebih prioritas daripada nilai default).
 // ════════════════════════════════════════════════════════════
 
 // ─── GLOBAL APP STATE ───────────────────────────────────────
 var APP = { user: null, token: '', currentPage: 'dashboard', charts: {}, surveyTab: 'garating', darkMode: false };
 
-// URL Web App GAS — fallback default (dapat ditimpa via Settings)
-var GAS_APP_URL = '';
+// URL Web App GAS — fallback default (dapat ditimpa via Settings → localStorage)
+var GAS_APP_URL = 'https://script.google.com/macros/s/AKfycbx8QERx-jfwsHnRWU72SDjgt_BG7XFmgHsfJ_cMfAWd9y4Uf61sPIvgrvQ2kC27TkM4GA/exec';
 
 /**
  * Ambil URL Web App GAS yang aktif (dari localStorage, atau default)
